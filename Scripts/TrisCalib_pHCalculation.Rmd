@@ -1,0 +1,85 @@
+---
+title: "LarvalSettlement_Analysis"
+author: "Hannah Merges"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Load libraries 
+```{r}
+library(segmented)
+library(plotrix)
+library(gridExtra)
+library(LoLinR)
+library(lubridate)
+library(chron)
+library(patchwork)
+library(tidyverse)
+library(here)
+library(PNWColors)
+library(ggrepel)
+library(reshape2)
+library(viridis)
+library(car)
+library(GGally)
+library(corrplot)
+library(PNWColors)
+library(seacarb)
+library(broom)
+library(calecopal)
+library(ggridges)
+library(agricolae)
+library(lme4)
+library(lmerTest)
+library(modelsummary)
+library(tidymodels)
+library(flextable)
+library(performance)
+library(agricolae)
+library(ggeffects)
+library(sjPlot)
+library(patchwork)
+library(broom)
+library(purrr)
+library(nlstools)
+library(stringr)
+library(emmeans)
+library(MuMIn)
+library(forcats)
+```
+
+## load datasets 
+
+## calculate proper pH from mV and Tris 
+```{r}
+## bring in pH calibration files and raw data files
+pHcalib<-read_csv(here("Data", "Jan2024_TrisCalibrations.csv")) %>%
+  mutate(TrisCalDate = ymd(TrisCalDate))
+
+pHData<-read_csv(here("Data", "2024_WaterChemMeasurements.csv")) %>%
+  mutate(TrisCalDate = ymd(TrisCalDate),
+         date = mdy(date))
+
+## take the mV calibration files by each date and use them to calculate pH
+pHSlope<-pHcalib %>%
+  nest_by(TrisCalDate)%>%
+  mutate(fitpH = list(lm(mVTris~TTris, data = data))) %>% # linear regression of mV and temp of the tris
+  summarise(broom::tidy(fitpH)) %>% # make the output tidy
+  select(TrisCalDate, term, estimate) %>%
+  pivot_wider(names_from = term, values_from = estimate) %>%# put slope and intercept in their own column
+  right_join(.,pHData) %>% # join with the pH sample data
+  mutate(mVTris = temp*TTris + `(Intercept)`) %>% # calculate the mV of the tris at temperature in which the pH of samples were measured
+   mutate(pH = pH(Ex=mV,Etris=mVTris,S=salinity,T=temp))  # calculate pH of the samples using the pH seacarb function
+
+
+```
+
+### save as a csv 
+```{r}
+write_csv(pHSlope, here("Data", "pHSlope.csv"))
+```
+

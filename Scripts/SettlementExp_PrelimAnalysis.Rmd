@@ -1,6 +1,18 @@
-## prelim test of settlement patterns in SGD treatments 
+---
+title: "SettlementExp_PrelimAnalysis"
+author: "Hannah Merges"
+date: "`r Sys.Date()`"
+output: html_document
+---
 
-#### Load libraries ####
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning=FALSE, 
+                      message=FALSE)
+```
+
+## Load libraries 
+```{r}
 library(segmented)
 library(plotrix)
 library(gridExtra)
@@ -12,7 +24,6 @@ library(tidyverse)
 library(here)
 library(PNWColors)
 library(ggrepel)
-#library(PerformanceAnalytics)
 library(reshape2)
 library(viridis)
 library(car)
@@ -40,24 +51,59 @@ library(nlstools)
 library(stringr)
 library(emmeans)
 library(MuMIn)
+library(forcats)
+library(ggmap)
+library(maptools)
+library(kriging)
+library(ggnewscale)
+library(wql)
+#library(glue)
+#library(curl)
+library(pscl)
+```
 
+## Bring in datasets
+```{r}
+SettlementCounts <- read_csv(here("Data","2024_SettlementCounts.csv"))
+pH <- read_csv(here("Data", "pHSlope.csv"))
+WaterChem<-read_csv(here("Data", "2024_WaterChemMeasurements.csv"))
+```
 
+## tidy the data and start visualizing 
 
-###########################
-#### Load data ####
-###########################
-SettlementCounts <- read_csv(here("Data","Jan24_SettlementCounts.csv"))
+```{r}
+pH <- pH %>% 
+  mutate(TrisCalDate = ymd(TrisCalDate))
+
+WaterChem <- WaterChem %>% 
+  mutate(TrisCalDate = ymd(TrisCalDate), 
+         date=mdy(date)) 
+
+waterchemdata <- pH %>% 
+  full_join(WaterChem, join_by(treatmentID_rep, experiment_number, sampling_period, TrisCalDate, time, date, orion_pH, mV, temp, salinity, light, note, TA, NN, phosphate, ammonia, silicate)) 
+
+SettlementCounts <- SettlementCounts %>% 
+  mutate(date = mdy(date))
+
+fulldata <- waterchemdata %>% 
+  full_join(SettlementCounts, join_by(treatmentID_rep, date))
 
 ###########################
 ## tidy data 
 ###########################
 
 SettlementCounts <- SettlementCounts %>% 
-  mutate(dead=20-(swimming+plastic+mesh+top+bottom+side)) %>% 
-  mutate(settled=(plastic+mesh+top+bottom+side)) %>% 
+  mutate(dead=20-(swimming+plastic_glue+mesh+top+bottom+side)) %>% 
+  mutate(settled=(plastic_glue+mesh+top+bottom+side)) %>% 
   mutate(treatment_level=as.factor(treatment_level), 
          spawning_day=as.factor(spawning_day)) %>% 
   mutate(dead = ifelse(dead < 0, 0, dead))
+
+```
+
+
+#### quick visualizations 
+```{r}
 
 ###############################################
 #### quick visualizations to plot patterns of settlement ####
@@ -229,5 +275,7 @@ settlement_by_day <- settlement_counts_mutated2 %>%
   facet_wrap(~spawning_day) +
   ggtitle("Settlers") + 
   scale_x_discrete(limits=c("Ambient","Low","Medium", "High"))
+```
+
 
 
