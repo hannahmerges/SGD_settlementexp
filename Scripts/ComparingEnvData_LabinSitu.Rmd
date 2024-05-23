@@ -91,7 +91,7 @@ AllChemData_edit <- AllChemData %>%
 WaterChem_edit <- WaterChem %>% 
   select(!c(time:experiment_number, orion_pH:TrisCalDate, note)) %>% 
   drop_na(phosphate) %>% 
-  group_by(treatment_level, date) %>% 
+  group_by(treatment_level, Location, date) %>% 
   summarise(sal_avg = mean(salinity),
             TA_avg = mean(TA),
             phos_avg = mean(phosphate), 
@@ -100,6 +100,27 @@ WaterChem_edit <- WaterChem %>%
             ammonia_avg = mean(ammonia)) %>% 
   pivot_longer(cols = sal_avg:ammonia_avg, names_to = "EnvParams")
 
+
+```
+
+#### Need to join the df in order to plot 
+### currently visualizing the way to do this being my treatments/experimental nuts on x and natural gradient on y per parameter 
+## and then put a abline=1 to see how the points compare 
+```{r}
+Measurements_to_Compare <- WaterChem_edit %>% 
+  full_join(AllChemData_edit, join_by(Location, EnvParams, value))
+
+
+```
+
+
+
+
+
+
+
+## try some plots 
+```{r}
 ## try to plot points against each other so can see side by side 
 ComparingEnvData1 <- AllChemData_edit %>% 
   filter(Location=="Cabral") %>% 
@@ -139,8 +160,6 @@ ComparingEnvData3
 # all next to each other 
 ComparingEnvData1 + ComparingEnvData2 + ComparingEnvData3
 ```
-
-
 
 
 

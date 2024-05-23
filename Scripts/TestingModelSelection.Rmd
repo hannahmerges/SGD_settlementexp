@@ -1,0 +1,748 @@
+---
+title: "Model selection on linear and nonlinear regressions of recruits on plates and SGD parameters"
+author: "Hannah Merges"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE)
+```
+
+# LOAD LIBRARIES
+```{r}
+library(tidyverse)
+library(here)
+library(ggrepel)
+library(patchwork)
+library(tidytext)
+library(AICcmodavg)
+library(kableExtra)
+library(PNWColors)
+
+```
+
+### Load and tidy data 
+```{r}
+CommComp_recruit_seasonavg_envdata <- read_csv(here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+
+CommComp_recruit_seasonavg_allenvdata <- CommComp_recruit_seasonavg_envdata %>% 
+  select(!c("Sand", "HardSubstrate", "sum_total_dead", "sum_total_alive")) %>%  
+  drop_na(sum_total)
+
+CommComp_recruit_seasonavg_allenvdata_C <- CommComp_recruit_seasonavg_allenvdata %>% 
+  filter(Location=="Cabral") %>% 
+  mutate(sum_total=log(sum_total+1)) %>% 
+  drop_na(sal_avg, phos_avg)
+
+CommComp_recruit_seasonavg_allenvdata_V <- CommComp_recruit_seasonavg_allenvdata %>% 
+  filter(Location=="Varari") %>% 
+  mutate(sum_total=log(sum_total+1)) %>% 
+  drop_na()
+
+
+CommComp_recruit_seasonavg_longpredictorvars_C <- CommComp_recruit_seasonavg_allenvdata %>% 
+  pivot_longer(cols = sal_avg:ammonia_CV, values_to = "Predictor_Values") %>% 
+  mutate(Predictor_Variable=name, 
+         Response_Variable=log(sum_total+1)) %>% 
+  select(!c(name, sum_total)) %>% 
+  filter(Location=="Cabral") %>% 
+  drop_na()
+
+CommComp_recruit_seasonavg_longpredictorvars_V <- CommComp_recruit_seasonavg_allenvdata %>% 
+  pivot_longer(cols = sal_avg:ammonia_CV, values_to = "Predictor_Values") %>% 
+  mutate(Predictor_Variable=name, 
+         Response_Variable=log(sum_total+1)) %>% 
+  select(!c(name, sum_total)) %>% 
+  filter(Location=="Varari") %>% 
+  drop_na()
+
+```
+
+
+
+### Danielle's script 
+```{r}
+modTable <- tibble(Y = as.character(),
+                     Parameter = as.character(),
+                     Reg_Type = as.character(), # linear or nonlinear
+                     AICc = as.numeric(),
+                     R2 = as.numeric(),
+                     pVal.P = as.numeric(),
+                     #pVal.Rug = as.numeric()
+                   )
+
+myDep <- colnames(resFric %>% select(NbSpP, NbFEsP, Vol8D,
+                                     resSpp, resFEp, resVol))
+mydata <- resFric %>%
+  select(CowTagID,NbSpP, NbFEsP, Vol8D,
+         resSpp, resFEp, resVol,
+         Salinity, Temperature, pH, Phosphate_umolL,
+         Silicate_umolL, NN_umolL, meanRugosity)
+
+
+for(i in myDep){
+  Y <- as.character(i)
+  k <- which(myDep == i) # use as multiplier for list
+
+  for(j in 8:ncol(mydata)){
+    Parameter <- colnames(mydata[j])
+
+    # with rugosity as covariate
+    model1R <- lm(paste0(Y, "~", Parameter, ""), data = mydata)
+    subdata1R <- as_tibble(cbind(Y,Parameter)) %>%
+      mutate(Parameter = paste0(Parameter,"")) %>%
+      mutate(Reg_Type = "Linear",
+             AICc = AICc(model1R),
+             R2 = summary(model1R)$r.squared,
+             pVal.P = summary(model1R)$coefficients[8]
+             )
+
+    # with rugosity as covariate
+    model2R <- lm(paste0(Y, "~ poly(", Parameter, ",2)"), data = mydata)
+    subdata2R <- as_tibble(cbind(Y,Parameter)) %>%
+      mutate(Parameter = paste0(Parameter,"")) %>%
+      mutate(Reg_Type = "Polynomial",
+             AICc = AICc(model2R),
+             R2 = summary(model2R)$r.squared,
+             pVal.P = summary(model2R)$coefficients[12]
+             )
+
+
+    modTable <- modTable %>%
+      rbind(subdata1R) %>%
+      rbind(subdata2R)
+
+  }
+}
+
+
+modelTable <- modTable %>%
+  group_by(Y) %>%
+  mutate(minAIC = min(AICc)) %>%
+  mutate(delAICc = AICc - minAIC) %>%
+  select(-c(minAIC)) %>%
+  mutate(Parameter = if_else(Parameter == "NN_umolL", "Nitrate+Nitrite",
+                     if_else(Parameter == "Phosphate_umolL", "Phosphate",
+                     if_else(Parameter == "Silicate_umolL", "Silicate",
+                     if_else(Parameter == "meanRugosity", "Rugosity", Parameter)))))
+
+
+# create AIC table for paper
+write_csv(modelTable, here("Output", "PaperFigures","Model_Selection_Table.csv"))
+#write_csv(modelTable_rug, here("Output", "PaperFigures","Model_Selection_Table_rugosity.csv"))
+
+modelTable <- read_csv(here("Output", "PaperFigures","Model_Selection_Table.csv"))
+#modelTable_rug <- read_csv(here("Output", "PaperFigures","Model_Selection_Table_rugosity.csv"))
+
+mypal <- pnw_palette("Starfish", n = 2)
+
+modelTableData <- modelTable %>%
+  group_by(Y) %>%
+  mutate(Y = if_else(Y == "resSpp", "% Taxon Richness (res)",
+             if_else(Y == "resFEp", "% FE Richness (res)",
+             if_else(Y == "resVol", "% FE Volume (res)",
+             if_else(Y == "NbSpP", "% Taxon Richness",
+             if_else(Y == "NbFEsP", "% FE Richness",
+             if_else(Y == "Vol8D", "% FE Volume", Y)))))),
+         Y = factor(Y, levels = c('% Taxon Richness', '% FE Richness', '% FE Volume',
+                                  '% Taxon Richness (res)', '% FE Richness (res)', '% FE Volume (res)')),
+         #Parameter = if_else(Parameter == "meanRugosity", "Rugosity", Parameter),
+         Reg_Type = factor(Reg_Type, levels = c("Polynomial", "Linear")),
+         Parameter = factor(Parameter,
+                            levels = c("Rugosity", "Phosphate", "Nitrate+Nitrite",
+                                       "pH", "Salinity", "Silicate", "Temperature",
+                                       "Phosphate + Rugosity", "Nitrate+Nitrite + Rugosity",
+                                       "pH + Rugosity", "Salinity + Rugosity",
+                                       "Silicate + Rugosity", "Temperature + Rugosity"))) %>%
+  mutate(minAICc = min(AICc),
+         deltaAICc = AICc - minAICc)
+
+AICplot <- modelTableData %>%
+  filter(Y== "% Taxon Richness" | Y == "% FE Richness" | Y== "% FE Volume") %>%
+  ggplot(aes(x = deltaAICc, y = fct_reorder(Parameter, desc(Parameter)), fill = Reg_Type)) +
+  geom_col(position = "dodge", color = "black") +
+  facet_wrap(~Y) +
+  labs(x = expression(Delta*"AICc"),
+       y= "Parameters",
+       fill = "Regression") +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        strip.text = element_text(size = 10),
+        legend.position = "top",
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        panel.grid = element_blank(),
+        axis.text = element_text(size = 10),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank()) +
+  scale_fill_manual(values = mypal) +
+  geom_vline(xintercept = 2, linetype = "dashed", size = 0.7)
+```
+
+## Jamie's script 
+```{r}
+gp_nn_ms <- GP_long_control %>%
+ungroup() %>% # ungroup the data
+  nest(data = -c(Response_measurement, Predictor_measurement)) %>% # nest all the data measurement type
+  mutate(fit = map(data, ~lm(Final~ Predictor_scaled, data = .))) #create models
+gp_nn_ms
+
+gp_nn_models <- gp_nn_ms$fit # shows you each of the models
+
+gp_nn_results <- gp_nn_ms %>%
+  mutate(coeff = map(fit, tidy),
+         aic =  map(fit, glance)) %>% # R2 and others
+  select(Predictor_measurement, coeff, aic) %>% # only keep the results
+  unnest() %>%
+  write_csv(here("Output", "Coefficients", "gp_coefficients.csv"))
+
+gp_nn_results_cleannames <- gp_nn_results %>%
+  mutate(Predictor = dplyr::recode(Predictor_measurement,
+                            "max_pH" = "Max pH",
+                            "max_Salinity" = "Max Salinity",
+                            "max_Temperature_C" = "Max Temperature",
+                            "max_NN_umolL" = "Max Nitrite + Nitrate",
+                            "max_Phosphate_umolL" = "Max Phosphate",
+                            "min_pH" = "Min pH",
+                            "min_Salinity" = "Min Salinity",
+                            "min_Temperature_C" = "Min Temperature",
+                            "min_NN_umolL" = "Min Nitrite + Nitrate",
+                            "min_Phosphate_umolL" = "Min Phosphate",
+                            "range_pH" = "pH Range",
+                            "range_Salinity" = "Salinity Range",
+                            "range_Temperature_C" = "Temperature Range",
+                            "range_NN_umolL" = "Nitrate + Nitrate Range",
+                            "range_Phosphate_umolL" = "Phosphate Range",
+                            "mean_pH" = "Mean pH",
+                            "mean_Salinity" = "Mean Salinity",
+                            "mean_Temperature_C" = "Mean Temperature",
+                            "mean_NN_umolL" = "Mean Nitrite + Nitrate",
+                            "mean_Phosphate_umolL" = "Mean Phosphate")) %>%
+  mutate(delAIC = AIC - min(AIC)) %>%
+  arrange(delAIC)
+```
+
+## Try with my data 
+## these are all linear models for both sites 
+```{r}
+
+## for Cabral 
+recruits_SGDparams_MS_C <- CommComp_recruit_seasonavg_longpredictorvars_C %>%
+  nest(data = -c(Predictor_Variable)) %>% # nest all the data measurement type
+  mutate(fit = map(data, ~lm(Response_Variable~ Predictor_Values, data = .))) #create models
+recruits_SGDparams_MS_C
+
+recruits_SGDparams_MS_model_C <- recruits_SGDparams_MS_C$fit # shows you each of the models
+
+recruits_SGDparams_results_C <- recruits_SGDparams_MS_C %>%
+  mutate(coeff = map(fit, tidy),
+         aic =  map(fit, glance)) %>% # R2 and others
+  select(Predictor_Variable, coeff, aic) %>% # only keep the results
+  unnest() %>%
+  write_csv(here("Outputs", "RecruitmentTiles", "modelselectionC.csv"))
+
+## for Varari 
+recruits_SGDparams_MS_V <- CommComp_recruit_seasonavg_longpredictorvars_V %>%
+  nest(data = -c(Predictor_Variable)) %>% # nest all the data measurement type
+  mutate(fit = map(data, ~lm(Response_Variable~ Predictor_Values, data = .))) #create models
+recruits_SGDparams_MS_V
+
+recruits_SGDparams_MS_model_V <- recruits_SGDparams_MS_V$fit # shows you each of the models
+
+recruits_SGDparams_results_V <- recruits_SGDparams_MS_V %>%
+  mutate(coeff = map(fit, tidy),
+         aic =  map(fit, glance)) %>% # R2 and others
+  select(Predictor_Variable, coeff, aic) %>% # only keep the results
+  unnest() %>%
+  write_csv(here("Outputs", "RecruitmentTiles", "modelselectionV.csv"))
+
+#############################################################
+### for Cabral 
+recruits_SGDparams_results_C_cleannames <- recruits_SGDparams_results_C %>%
+  mutate(Predictor = dplyr::recode(Predictor_Variable,
+                            "pH_max" = "Max pH",
+                            "sal_max" = "Max Salinity",
+                            "temp_max" = "Max Temperature",
+                            "NN_max" = "Max Nitrite + Nitrate",
+                            "phos_max" = "Max Phosphate",
+                            "TA_max" = "Max TA", 
+                            "silicate_max" = "Max Silicate", 
+                            "ammonia_max" = "Max Ammonia", 
+                            "pH_min" = "Min pH",
+                            "sal_min" = "Min Salinity",
+                            "temp_min" = "Min Temperature",
+                            "NN_min" = "Min Nitrite + Nitrate",
+                            "phos_min" = "Min Phosphate",
+                            "TA_min" = "Min TA", 
+                            "silicate_min" = "Min Silicate", 
+                            "ammonia_min" = "Min Ammonia", 
+                            "pH_CV" = "pH CV",
+                            "sal_CV" = "Salinity CV",
+                            "temp_CV" = "Temperature CV",
+                            "NN_CV" = "Nitrate + Nitrate CV",
+                            "phos_CV" = "Phosphate CV",
+                            "TA_CV" = "TA CV", 
+                            "silicate_CV" = "Silicate CV", 
+                            "ammonia_CV" = "Ammonia CV", 
+                            "ph_avg" = "Mean pH",
+                            "sal_avg" = "Mean Salinity",
+                            "temp_avg" = "Mean Temperature",
+                            "NN_avg" = "Mean Nitrite + Nitrate",
+                            "phos_avg" = "Mean Phosphate", 
+                            "TA_avg" = "Mean TA", 
+                            "silicate_avg" = "Mean Silicate", 
+                            "ammonia_avg" = "Mean Ammonia")) %>%
+  mutate(delAIC = AIC - min(AIC)) %>%
+  arrange(delAIC)
+
+## for Varari 
+recruits_SGDparams_results_V_cleannames <- recruits_SGDparams_results_V %>%
+  mutate(Predictor = dplyr::recode(Predictor_Variable,
+                            "pH_max" = "Max pH",
+                            "sal_max" = "Max Salinity",
+                            "temp_max" = "Max Temperature",
+                            "NN_max" = "Max Nitrite + Nitrate",
+                            "phos_max" = "Max Phosphate",
+                            "TA_max" = "Max TA", 
+                            "silicate_max" = "Max Silicate", 
+                            "ammonia_max" = "Max Ammonia", 
+                            "pH_min" = "Min pH",
+                            "sal_min" = "Min Salinity",
+                            "temp_min" = "Min Temperature",
+                            "NN_min" = "Min Nitrite + Nitrate",
+                            "phos_min" = "Min Phosphate",
+                            "TA_min" = "Min TA", 
+                            "silicate_min" = "Min Silicate", 
+                            "ammonia_min" = "Min Ammonia", 
+                            "pH_CV" = "pH CV",
+                            "sal_CV" = "Salinity CV",
+                            "temp_CV" = "Temperature CV",
+                            "NN_CV" = "Nitrate + Nitrate CV",
+                            "phos_CV" = "Phosphate CV",
+                            "TA_CV" = "TA CV", 
+                            "silicate_CV" = "Silicate CV", 
+                            "ammonia_CV" = "Ammonia CV", 
+                            "ph_avg" = "Mean pH",
+                            "sal_avg" = "Mean Salinity",
+                            "temp_avg" = "Mean Temperature",
+                            "NN_avg" = "Mean Nitrite + Nitrate",
+                            "phos_avg" = "Mean Phosphate", 
+                            "TA_avg" = "Mean TA", 
+                            "silicate_avg" = "Mean Silicate", 
+                            "ammonia_avg" = "Mean Ammonia")) %>%
+  mutate(delAIC = AIC - min(AIC)) %>%
+  arrange(delAIC)
+recruits_SGDparams_results_V_cleannames
+
+```
+
+## try to get nonlinear models to work 
+```{r}
+
+
+## for Cabral 
+recruits_SGDparams_MS_C_nonlinear <- CommComp_recruit_seasonavg_longpredictorvars_C %>%
+  nest(data = -c(Predictor_Variable)) %>% # nest all the data measurement type
+  mutate(fit = map(data, ~lm(Response_Variable~ poly(Predictor_Values, degree=2), data = .))) #create models
+recruits_SGDparams_MS_C_nonlinear
+
+recruits_SGDparams_MS_nonlinearmodel_C <- recruits_SGDparams_MS_C_nonlinear$fit # shows you each of the models
+
+recruits_SGDparams_results_C_nonlinear <- recruits_SGDparams_MS_C_nonlinear %>%
+  mutate(coeff = map(fit, tidy),
+         aic =  map(fit, glance)) %>% # R2 and others
+  select(Predictor_Variable, coeff, aic) %>% # only keep the results
+  unnest() %>%
+  write_csv(here("Outputs", "RecruitmentTiles", "nonlinear_modelselectionC.csv"))
+
+## for Varari 
+recruits_SGDparams_MS_V_nonlinear <- CommComp_recruit_seasonavg_longpredictorvars_V %>%
+  nest(data = -c(Predictor_Variable)) %>% # nest all the data measurement type
+  mutate(fit = map(data, ~lm(Response_Variable~ poly(Predictor_Values, degree=2), data = .))) #create models
+recruits_SGDparams_MS_V_nonlinear
+
+recruits_SGDparams_MS_model_V_nonlinear <- recruits_SGDparams_MS_V_nonlinear$fit # shows you each of the models
+
+recruits_SGDparams_results_V_nonlinear <- recruits_SGDparams_MS_V_nonlinear %>%
+  mutate(coeff = map(fit, tidy),
+         aic =  map(fit, glance)) %>% # R2 and others
+  select(Predictor_Variable, coeff, aic) %>% # only keep the results
+  unnest() %>%
+  write_csv(here("Outputs", "RecruitmentTiles", "nonlinear_modelselectionV.csv"))
+
+#############################################################
+### for Cabral 
+recruits_SGDparams_results_C_nonlinear_cleannames <- recruits_SGDparams_results_C_nonlinear %>%
+  mutate(Predictor = dplyr::recode(Predictor_Variable,
+                            "pH_max" = "Max pH",
+                            "sal_max" = "Max Salinity",
+                            "temp_max" = "Max Temperature",
+                            "NN_max" = "Max Nitrite + Nitrate",
+                            "phos_max" = "Max Phosphate",
+                            "TA_max" = "Max TA", 
+                            "silicate_max" = "Max Silicate", 
+                            "ammonia_max" = "Max Ammonia", 
+                            "pH_min" = "Min pH",
+                            "sal_min" = "Min Salinity",
+                            "temp_min" = "Min Temperature",
+                            "NN_min" = "Min Nitrite + Nitrate",
+                            "phos_min" = "Min Phosphate",
+                            "TA_min" = "Min TA", 
+                            "silicate_min" = "Min Silicate", 
+                            "ammonia_min" = "Min Ammonia", 
+                            "pH_CV" = "pH CV",
+                            "sal_CV" = "Salinity CV",
+                            "temp_CV" = "Temperature CV",
+                            "NN_CV" = "Nitrate + Nitrate CV",
+                            "phos_CV" = "Phosphate CV",
+                            "TA_CV" = "TA CV", 
+                            "silicate_CV" = "Silicate CV", 
+                            "ammonia_CV" = "Ammonia CV", 
+                            "ph_avg" = "Mean pH",
+                            "sal_avg" = "Mean Salinity",
+                            "temp_avg" = "Mean Temperature",
+                            "NN_avg" = "Mean Nitrite + Nitrate",
+                            "phos_avg" = "Mean Phosphate", 
+                            "TA_avg" = "Mean TA", 
+                            "silicate_avg" = "Mean Silicate", 
+                            "ammonia_avg" = "Mean Ammonia")) %>%
+  mutate(delAIC = AIC - min(AIC)) %>%
+  arrange(delAIC)
+
+## for Varari 
+recruits_SGDparams_results_V_nonlinear_cleannames <- recruits_SGDparams_results_V_nonlinear %>%
+  mutate(Predictor = dplyr::recode(Predictor_Variable,
+                            "pH_max" = "Max pH",
+                            "sal_max" = "Max Salinity",
+                            "temp_max" = "Max Temperature",
+                            "NN_max" = "Max Nitrite + Nitrate",
+                            "phos_max" = "Max Phosphate",
+                            "TA_max" = "Max TA", 
+                            "silicate_max" = "Max Silicate", 
+                            "ammonia_max" = "Max Ammonia", 
+                            "pH_min" = "Min pH",
+                            "sal_min" = "Min Salinity",
+                            "temp_min" = "Min Temperature",
+                            "NN_min" = "Min Nitrite + Nitrate",
+                            "phos_min" = "Min Phosphate",
+                            "TA_min" = "Min TA", 
+                            "silicate_min" = "Min Silicate", 
+                            "ammonia_min" = "Min Ammonia", 
+                            "pH_CV" = "pH CV",
+                            "sal_CV" = "Salinity CV",
+                            "temp_CV" = "Temperature CV",
+                            "NN_CV" = "Nitrate + Nitrate CV",
+                            "phos_CV" = "Phosphate CV",
+                            "TA_CV" = "TA CV", 
+                            "silicate_CV" = "Silicate CV", 
+                            "ammonia_CV" = "Ammonia CV", 
+                            "ph_avg" = "Mean pH",
+                            "sal_avg" = "Mean Salinity",
+                            "temp_avg" = "Mean Temperature",
+                            "NN_avg" = "Mean Nitrite + Nitrate",
+                            "phos_avg" = "Mean Phosphate", 
+                            "TA_avg" = "Mean TA", 
+                            "silicate_avg" = "Mean Silicate", 
+                            "ammonia_avg" = "Mean Ammonia")) %>%
+  mutate(delAIC = AIC - min(AIC)) %>%
+  arrange(delAIC)
+```
+
+
+## now join datasets with nonlinear and linear models so just have one file per site 
+```{r}
+joinedresultsV <- recruits_SGDparams_results_V_nonlinear_cleannames %>% 
+  full_join(recruits_SGDparams_results_V_cleannames) %>% 
+  arrange(delAIC) %>% 
+  write_csv(here("Outputs", "RecruitmentTiles", "joinedresultsV.csv"))
+
+
+joinedresultsC <- recruits_SGDparams_results_C_nonlinear_cleannames %>% 
+  full_join(recruits_SGDparams_results_C_cleannames) %>% 
+  arrange(delAIC) %>% 
+  write_csv(here("Outputs", "RecruitmentTiles", "joinedresultsC.csv"))
+
+
+```
+
+### now plot the top few models 
+```{r}
+longCV <- read_csv(here("Data", "longCV.csv"))
+longMEAN <- read_csv(here("Data", "longMEAN.csv"))
+longMAX <- read_csv(here("Data", "longMAX.csv"))
+longMIN <- read_csv(here("Data", "longMIN.csv"))
+
+### ONLY PLOT THE TOP MODELS 
+## top models : 
+## Cabral: Max Temp (nonlinear) , Min TA (linear), TA CV (linear), Temp CV (nonlinear) --> all less than 0.5 deltaAIC 
+## Varari: pH CV (nonlinear), max pH (linear and nonlinear), Temp CV (nonlinear) --> all less than 1 deltaAIC 
+
+#########################
+###for Cabral 
+
+#####################
+##### max temp (nonlinear)
+####################
+maxtemp_C <- longMAX %>% 
+  drop_na(sum_total) %>% ## gets rid of seep data 
+  filter(MAXenv_params == "temp_max", 
+         Location== "Cabral") %>% 
+  ggplot(aes(x=max_value, 
+             y=log(sum_total+1))) +
+  geom_point(size=3, shape=21) + 
+   geom_smooth(method=lm, formula="y~poly(x,2)") + 
+ # facet_wrap(Location~MAXenv_params, scales = "free") + 
+  theme_bw() + 
+  labs(x="value", 
+       y="recruit counts", 
+       title="Max Temp") + 
+  theme(axis.text.x=element_text(size=18), 
+        axis.text.y=element_text(size=18), 
+        axis.title.x=element_text(size=18),
+        axis.title.y=element_text(size=18), 
+        plot.title=element_text(hjust=0.5, ## centers title 
+                                size=20)) 
+maxtemp_C
+ggsave(here("Outputs", "RecruitmentTiles", "ModelSelection", "Cabral", "max_temp.jpg"))
+
+#################
+## min TA (linear)
+#################
+min_TA <- longMIN %>% 
+  drop_na(sum_total) %>% ## gets rid of seep data 
+  filter(MINenv_params == "TA_min", 
+         Location== "Cabral") %>% 
+  ggplot(aes(x=min_value, 
+             y=log(sum_total+1))) +
+  geom_point(size=3, shape=21) + 
+  geom_smooth(method=lm) + 
+ # facet_wrap(Location~MAXenv_params, scales = "free") + 
+  theme_bw() + 
+  labs(x="value", 
+       y="recruit counts", 
+       title="Min TA") + 
+  theme(axis.text.x=element_text(size=18), 
+        axis.text.y=element_text(size=18), 
+        axis.title.x=element_text(size=18),
+        axis.title.y=element_text(size=18), 
+        plot.title=element_text(hjust=0.5, ## centers title 
+                                size=20)) 
+min_TA
+ggsave(here("Outputs", "RecruitmentTiles", "ModelSelection", "Cabral", "min_TA.jpg"))
+
+#########################
+## Temp CV (nonlinear)
+#######################
+temp_CV <- longCV %>% 
+  drop_na(sum_total) %>% ## gets rid of seep data 
+  filter(CVenv_params == "temp_CV", 
+         Location== "Cabral") %>% 
+  ggplot(aes(x=CV_value, 
+             y=log(sum_total+1))) +
+  geom_point(size=3, shape=21) + 
+  geom_smooth(method=lm, formula="y~poly(x,2)") + 
+ # facet_wrap(Location~MAXenv_params, scales = "free") + 
+  theme_bw() + 
+  labs(x="value", 
+       y="recruit counts", 
+       title="CV Temp") + 
+  theme(axis.text.x=element_text(size=18), 
+        axis.text.y=element_text(size=18), 
+        axis.title.x=element_text(size=18),
+        axis.title.y=element_text(size=18), 
+        plot.title=element_text(hjust=0.5, ## centers title 
+                                size=20)) 
+temp_CV
+ggsave(here("Outputs", "RecruitmentTiles", "ModelSelection", "Cabral", "temp_CV.jpg"))
+
+#######################
+## TA CV (linear)
+######################
+TA_CV <- longCV %>% 
+  drop_na(sum_total) %>% ## gets rid of seep data 
+  filter(CVenv_params == "TA_CV", 
+         Location== "Cabral") %>% 
+  ggplot(aes(x=CV_value, 
+             y=log(sum_total+1))) +
+  geom_point(size=3, shape=21) + 
+  geom_smooth(method=lm) + 
+ # facet_wrap(Location~MAXenv_params, scales = "free") + 
+  theme_bw() + 
+  labs(x="value", 
+       y="recruit counts", 
+       title="CV TA") + 
+  theme(axis.text.x=element_text(size=18), 
+        axis.text.y=element_text(size=18), 
+        axis.title.x=element_text(size=18),
+        axis.title.y=element_text(size=18), 
+        plot.title=element_text(hjust=0.5, ## centers title 
+                                size=20)) 
+TA_CV
+ggsave(here("Outputs", "RecruitmentTiles", "ModelSelection", "Cabral", "TA_CV.jpg"))
+
+########################
+## Varari 
+
+#########################################
+## pH CV (nonlinear)
+#########################################
+pH_CV <- longCV %>% 
+  drop_na(sum_total) %>% ## gets rid of seep data 
+  filter(CVenv_params == "pH_CV", 
+         Location== "Varari") %>% 
+  ggplot(aes(x=CV_value, 
+             y=log(sum_total+1))) +
+  geom_point(size=3, shape=21) + 
+   geom_smooth(method=lm, formula="y~poly(x,2)") + 
+ # facet_wrap(Location~MAXenv_params, scales = "free") + 
+  theme_bw() + 
+  labs(x="value", 
+       y="recruit counts", 
+       title="CV pH") + 
+  theme(axis.text.x=element_text(size=18), 
+        axis.text.y=element_text(size=18), 
+        axis.title.x=element_text(size=18),
+        axis.title.y=element_text(size=18), 
+        plot.title=element_text(hjust=0.5, ## centers title 
+                                size=20)) 
+pH_CV
+ggsave(here("Outputs", "RecruitmentTiles", "ModelSelection", "Varari", "pH_CV.jpg"))
+
+#########################################
+## max pH (linear and nonlinear)
+#########################################
+max_pH_nonlinear <- longMAX %>% 
+  drop_na(sum_total) %>% ## gets rid of seep data 
+  filter(MAXenv_params == "pH_max", 
+         Location== "Varari") %>% 
+  ggplot(aes(x=max_value, 
+             y=log(sum_total+1))) +
+  geom_point(size=3, shape=21) + 
+   geom_smooth(method=lm, formula="y~poly(x,2)") + 
+ # facet_wrap(Location~MAXenv_params, scales = "free") + 
+  theme_bw() + 
+  labs(x="value", 
+       y="recruit counts", 
+       title="max pH") + 
+  theme(axis.text.x=element_text(size=18), 
+        axis.text.y=element_text(size=18), 
+        axis.title.x=element_text(size=18),
+        axis.title.y=element_text(size=18), 
+        plot.title=element_text(hjust=0.5, ## centers title 
+                                size=20)) 
+max_pH_nonlinear
+ggsave(here("Outputs", "RecruitmentTiles", "ModelSelection", "Varari", "max_pH_nonlinear.jpg"))
+
+#########################################
+## max pH (linear and nonlinear)
+#########################################
+max_pH_linear <- longMAX %>% 
+  drop_na(sum_total) %>% ## gets rid of seep data 
+  filter(MAXenv_params == "pH_max", 
+         Location== "Varari") %>% 
+  ggplot(aes(x=max_value, 
+             y=log(sum_total+1))) +
+  geom_point(size=3, shape=21) + 
+   geom_smooth(method=lm) + 
+ # facet_wrap(Location~MAXenv_params, scales = "free") + 
+  theme_bw() + 
+  labs(x="value", 
+       y="recruit counts", 
+       title="max pH") + 
+  theme(axis.text.x=element_text(size=18), 
+        axis.text.y=element_text(size=18), 
+        axis.title.x=element_text(size=18),
+        axis.title.y=element_text(size=18), 
+        plot.title=element_text(hjust=0.5, ## centers title 
+                                size=20)) 
+max_pH_linear
+ggsave(here("Outputs", "RecruitmentTiles", "ModelSelection", "Varari", "max_pH_linear.jpg"))
+
+#########################################
+## Temp CV (nonlinear)
+#########################################
+CV_temp_linear <- longCV %>% 
+  drop_na(sum_total) %>% ## gets rid of seep data 
+  filter(CVenv_params == "temp_CV", 
+         Location== "Varari") %>% 
+  ggplot(aes(x=CV_value, 
+             y=log(sum_total+1))) +
+  geom_point(size=3, shape=21) + 
+  geom_smooth(method=lm, formula="y~poly(x,2)") + 
+ # facet_wrap(Location~MAXenv_params, scales = "free") + 
+  theme_bw() + 
+  labs(x="value", 
+       y="recruit counts", 
+       title="CV temp") + 
+  theme(axis.text.x=element_text(size=18), 
+        axis.text.y=element_text(size=18), 
+        axis.title.x=element_text(size=18),
+        axis.title.y=element_text(size=18), 
+        plot.title=element_text(hjust=0.5, ## centers title 
+                                size=20)) 
+CV_temp_linear
+ggsave(here("Outputs", "RecruitmentTiles", "ModelSelection", "Varari", "temp_CV.jpg"))
+
+
+#########################################
+
+
+
+#########################################
+## plot sd(TA) instead of CV 
+#########################################
+
+CommComp_recruit_seasonavg_allenvdata_C2 <- CommComp_recruit_seasonavg_allenvdata_C %>% 
+  select(!c(sal_avg:ammonia_CV)) 
+
+
+sd_TA_plot <- CommComp_recruit_seasonavg_allenvdata_C2 %>% 
+  ggplot(aes(x=sd_TA, 
+             y=sum_total)) +
+  geom_point(size=3, shape=21) + 
+  geom_smooth(method=lm, formula="y~poly(x,2)") + 
+ # facet_wrap(Location~MAXenv_params, scales = "free") + 
+  theme_bw() + 
+  labs(x="value", 
+       y="recruit counts", 
+       title="SD TA") + 
+  theme(axis.text.x=element_text(size=18), 
+        axis.text.y=element_text(size=18), 
+        axis.title.x=element_text(size=18),
+        axis.title.y=element_text(size=18), 
+        plot.title=element_text(hjust=0.5, ## centers title 
+                                size=20)) 
+sd_TA_plot
+ggsave(here("Outputs", "RecruitmentTiles", "ModelSelection", "Cabral", "sd_TA.jpg"))
+
+
+
+
+
+### AIC plots 
+
+AICplots_C <- joinedresultsC %>% 
+  ggplot(aes(x=delAIC, 
+             y=Predictor, 
+             fill=term)) + 
+  geom_col(position = "dodge") +
+  labs(x = "DeltaAIC",
+       y= "Parameters",
+       fill = "Regression Type") + 
+  theme_classic() + 
+  scale_fill_manual(values=pnw_palette("Sailboat")) 
+AICplots_C
+
+```
+
+
+### Findings: 
+TA at Cabral might have an outlier point at 2100 - so need to redo that 
+
+## make a PCA that has a TA/pH axis (biology) and a nutrient axis... You may need to play around with what goes in (like mean, min, max, sd... is a lot... try with that, but also mean just mean and standard deviation). Look at the PCA plot and the loading arrows before you use the scores in a regression and see if the loadings make sense
+
+
+## And... the next step I want to try is a PCA approach. The max pH data is pretty clean here for Varari and the TA data for Cabral is interesting... Cabral SGD as really low TA and it generally shows that the lower TA has higher recruits (which is higher amounts of SGD)... or it could be just biologically driven and the places with the most corals, which would have the highest variance in TA because of calcification, have the most recruits.... this could kind be the same story for pH, which is really biologically driven at the site

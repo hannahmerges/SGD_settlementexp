@@ -1,0 +1,264 @@
+---
+title: "PCA for Environmental Parameters along natural SGD gradient/recruitment tiles"
+author: "Hannah Merges"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE)
+```
+
+### Load libraries 
+```{r}
+library(tidyverse)
+library(here)
+library(ggrepel)
+library(patchwork)
+library(tidytext)
+library(AICcmodavg)
+library(kableExtra)
+library(PNWColors)
+library(factoextra)
+library(devtools)
+library(ggbiplot)
+```
+
+### Load Data
+```{r}
+EnvData_wrecruitcounts <- read_csv(here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+
+```
+
+## tidy data for a PCA 
+```{r}
+EnvData_wrecruitcounts2 <- EnvData_wrecruitcounts %>% 
+  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  drop_na() %>% 
+  mutate(sum_total=log(sum_total+1)) ## confirm if this should still be logged 
+
+EnvData_wrecruitcounts2$sum_total <- as.character(EnvData_wrecruitcounts2$sum_total)
+```
+
+## start building PCA 
+```{r}
+
+biogeochem1 <- EnvData_wrecruitcounts2[,-c(1,2)] # remove first column so it is just biogeochem data to get PCs
+
+biogeochem.scale <- scale(biogeochem1, scale=TRUE, center=TRUE) ## convert all data to z-scores 
+
+biogeochem_PCAmodel <- princomp(biogeochem.scale, cor=FALSE) # Run the PCA with `princomp()`
+
+summary(biogeochem_PCAmodel) ## look at the model
+# This shows amount of variance explained by each axis.
+
+plot(biogeochem_PCAmodel, type="lines")
+
+## prettier version 
+fviz_eig(biogeochem_PCAmodel)
+
+biogeochem_PCAmodel$loadings  # Shows the loadings of each trait on each PC 
+
+biogeochem_PCAmodel$scores # Gives output of the principal components for each individual
+
+# If we want to use the PC scores for something else (maybe we want to use PC1 to run an ANOVA?), then we can pull out that vector.
+biogeochem_PC1 <- biogeochem_PCAmodel$scores[,1] # Pulls out the first column of the table 
+biogeochem_PC1
+
+# And we could run a quick ANOVA to see if biogeochem differ in PC1 scores. 
+# (This works because the ordering of rows in the PC scores table is the same 
+# as the order in the original data table.)
+
+biogeochem_model1 <- lm(biogeochem_PC1~EnvData_wrecruitcounts2$sum_total*EnvData_wrecruitcounts2$Location)
+anova(biogeochem_model1)
+
+biplot(biogeochem_PCAmodel, xlab="PC1", ylab="PC2")
+# The black numbers are each individual recruit total count. The red lines are the vectors for each biogeochem parameter 
+
+```
+
+
+## use ggbiplot to make nicer output 
+```{r}
+# In this biplot code, I'm going to separate the recruits by number (so use non-subsetted data file). use the original file to refer to recruits, but the PCA data for everything else. I'm also going to put confidence intervals around the recruit counts 
+
+biogeochem_PCAplot <- biogeochem_PCAmodel %>% 
+  ggbiplot(obs.scale=1, 
+           var.scale=1, 
+           groups=EnvData_wrecruitcounts2$Location, 
+           ellipse=TRUE, 
+           varname.size=3, 
+           varname.adjust=1.2, 
+           circle=FALSE) +
+  scale_color_discrete(name='') +
+  geom_point(aes(colour=factor(EnvData_wrecruitcounts2$Location)), 
+             size = 3) + 
+  theme_classic() +
+  theme(legend.direction = 'horizontal', 
+        legend.position='bottom', 
+        legend.text=element_text(size=8))
+
+biogeochem_PCAplot
+ggsave(here("Outputs", "RecruitmentTiles", "PCA_plot.jpg")) 
+
+
+```
+
+
+#### Everything above included BOTH Varari and Cabral 
+## now separate the two - Varari first 
+## and only include means and sd
+```{r}
+
+EnvData_wrecruitcounts_V <- EnvData_wrecruitcounts %>% 
+  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  drop_na() %>% 
+  mutate(sum_total=log(sum_total+1)) %>% 
+  filter(Location=="Varari") %>% 
+  select(!"Location")
+
+EnvData_wrecruitcounts_V$sum_total <- as.character(EnvData_wrecruitcounts_V$sum_total)
+
+##########################
+###########################
+biogeochem_V <- EnvData_wrecruitcounts_V[,-1] # remove first and second columns so it is just biogeochem data to get PCs
+
+Vbiogeochem.scale <- scale(biogeochem_V, scale=TRUE, center=TRUE) ## convert all data to z-scores 
+
+biogeochem_PCAmodel_V <- princomp(Vbiogeochem.scale, cor=FALSE) # Run the PCA with `princomp()`
+
+summary(biogeochem_PCAmodel_V) ## look at the model
+# This shows amount of variance explained by each axis.
+
+plot(biogeochem_PCAmodel_V, type="lines")
+
+## prettier version 
+fviz_eig(biogeochem_PCAmodel_V)
+
+biogeochem_PCAmodel_V$loadings  # Shows the loadings of each trait on each PC 
+
+biogeochem_PCAmodel_V$scores # Gives output of the principal components for each individual
+
+# If we want to use the PC scores for something else (maybe we want to use PC1 to run an ANOVA?), then we can pull out that vector.
+Vbiogeochem_PC1 <- biogeochem_PCAmodel_V$scores[,1] # Pulls out the first column of the table 
+Vbiogeochem_PC1
+
+# And we could run a quick ANOVA to see if biogeochem differ in PC1 scores. 
+# (This works because the ordering of rows in the PC scores table is the same 
+# as the order in the original data table.)
+
+biogeochem_model_V <- lm(Vbiogeochem_PC1~EnvData_wrecruitcounts_V$sum_total)
+anova(biogeochem_model_V)
+
+biplot(biogeochem_PCAmodel_V, xlab="PC1", ylab="PC2")
+# The black numbers are each individual recruit total count. The red lines are the vectors for each biogeochem parameter 
+
+###########################
+###########################
+
+biogeochem_PCAplot_V <- biogeochem_PCAmodel_V %>% 
+  ggbiplot(obs.scale=1, 
+           var.scale=1, 
+           groups=EnvData_wrecruitcounts_V$sum_total, 
+           ellipse=TRUE, 
+           varname.size=3, 
+           varname.adjust=1.2, 
+           circle=FALSE) +
+  scale_color_discrete(name='') +
+  geom_point(aes(colour=factor(EnvData_wrecruitcounts_V$sum_total)), 
+             size = 3) + 
+  theme_classic() +
+  theme(legend.direction = 'horizontal', 
+        legend.position='bottom', 
+        legend.text=element_text(size=8)) 
+
+biogeochem_PCAplot_V
+ggsave(here("Outputs", "RecruitmentTiles", "PCA_plot_V.jpg")) 
+
+```
+
+## now Cabral 
+```{r}
+
+EnvData_wrecruitcounts_C <- EnvData_wrecruitcounts %>% 
+  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  drop_na() %>% 
+  mutate(sum_total=log(sum_total+1)) %>% 
+  filter(Location=="Cabral") %>% 
+  select(!"Location")
+
+EnvData_wrecruitcounts_C$sum_total <- as.character(EnvData_wrecruitcounts_C$sum_total)
+
+##########################
+###########################
+biogeochem_C <- EnvData_wrecruitcounts_C[,-1] # remove first and second columns so it is just biogeochem data to get PCs
+
+Cbiogeochem.scale <- scale(biogeochem_C, scale=TRUE, center=TRUE) ## convert all data to z-scores 
+
+biogeochem_PCAmodel_C <- princomp(Cbiogeochem.scale, cor=FALSE) # Run the PCA with `princomp()`
+
+summary(biogeochem_PCAmodel_C) ## look at the model
+# This shows amount of variance explained by each axis.
+
+plot(biogeochem_PCAmodel_C, type="lines")
+
+## prettier version 
+fviz_eig(biogeochem_PCAmodel_C)
+
+biogeochem_PCAmodel_C$loadings  # Shows the loadings of each trait on each PC 
+
+biogeochem_PCAmodel_C$scores # Gives output of the principal components for each individual
+
+# If we want to use the PC scores for something else (maybe we want to use PC1 to run an ANOVA?), then we can pull out that vector.
+Cbiogeochem_PC1 <- biogeochem_PCAmodel_C$scores[,1] # Pulls out the first column of the table 
+Cbiogeochem_PC1
+
+# And we could run a quick ANOVA to see if biogeochem differ in PC1 scores. 
+# (This works because the ordering of rows in the PC scores table is the same 
+# as the order in the original data table.)
+
+biogeochem_model_C <- lm(Cbiogeochem_PC1~EnvData_wrecruitcounts_C$sum_total)
+anova(biogeochem_model_C)
+
+biplot(biogeochem_PCAmodel_C, xlab="PC1", ylab="PC2")
+# The black numbers are each individual recruit total count. The red lines are the vectors for each biogeochem parameter 
+
+###########################
+###########################
+
+biogeochem_PCAplot_C <- biogeochem_PCAmodel_C %>% 
+  ggbiplot(obs.scale=1, 
+           var.scale=1, 
+           groups=EnvData_wrecruitcounts_C$sum_total, 
+           ellipse=TRUE, 
+           varname.size=3, 
+           varname.adjust=1.2, 
+           circle=FALSE) +
+  scale_color_discrete(name='') +
+  geom_point(aes(colour=factor(EnvData_wrecruitcounts_C$sum_total)), 
+             size = 3) + 
+  theme_classic() +
+  theme(legend.direction = 'horizontal', 
+        legend.position='bottom', 
+        legend.text=element_text(size=8)) 
+
+biogeochem_PCAplot_C
+ggsave(here("Outputs", "RecruitmentTiles", "PCA_plot_C.jpg")) 
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+

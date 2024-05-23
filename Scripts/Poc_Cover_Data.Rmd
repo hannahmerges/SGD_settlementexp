@@ -1,0 +1,167 @@
+---
+title: "Poc Cover Data with Biogeochem Params and Recruit Counts"
+author: "Hannah Merges"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE)
+```
+
+### Load libraries 
+```{r}
+library(tidyverse)
+library(here)
+library(ggrepel)
+library(patchwork)
+library(tidytext)
+library(AICcmodavg)
+library(kableExtra)
+library(PNWColors)
+library(factoextra)
+library(devtools)
+library(ggbiplot)
+```
+
+
+### Load Data
+```{r}
+EnvData_wrecruitcounts <- read_csv(here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+
+Poc_cover_data <- read_csv(here("Data", "Species_Composition_2022_Danielle.csv"))
+
+PercentCover <- read_csv("https://raw.githubusercontent.com/dbarnas/Community_Functional_Diversity/main/Data/Full_Metadata.csv")
+
+PercentCover3 <- read_csv(here("Data", "PercentCover3.csv"))
+
+RecruitmentCounts2.1 <- read_csv((here("Data", "RecruitmentCounts2.1.csv")))
+```
+
+## Tidy data and join in Danielle's Poc cover data 
+```{r}
+
+Poc_cover_data <- Poc_cover_data %>% 
+  filter(Taxa=="Pocillopora acuta", 
+         Location!="Varari_Maya") %>% 
+  select(!c("Date", "PhotoNum", "Notes")) 
+
+
+EnvData_wPocCover <- EnvData_wrecruitcounts %>% 
+  full_join(Poc_cover_data) %>% 
+  filter(CowTagID!= "CSEEP", CowTagID!= "VSEEP")
+
+```
+
+## Look at recruit totals by how many P acuta at the CowTagID
+
+```{r}
+
+recruits_by_PocCover <- EnvData_wPocCover %>% 
+  ggplot(aes(x=SpeciesCounts, 
+             y=log(sum_total+1), 
+             color=Location)) + 
+  geom_point(size=3) + 
+  theme_classic() + 
+  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  geom_smooth(method=lm, 
+              fill="cornsilk3", 
+              alpha=0.2) + ## alpha adjusts the transparency 
+  labs(x="Number of P. acuta Species found near tile location", 
+       y="Logged Total of Recruits")
+
+recruits_by_PocCover
+ggsave(here("Outputs", "RecruitmentTiles", "recruits_by_PocCover.jpg"))
+
+recruits_by_PocCover_facet <- EnvData_wPocCover %>% 
+  ggplot(aes(x=SpeciesCounts, 
+             y=log(sum_total+1), 
+             color=Location)) + 
+  geom_point(size=3) + 
+  theme_classic() + 
+  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  geom_smooth(method=lm, 
+              fill="cornsilk3", 
+              alpha=0.2) + ## alpha adjusts the transparency 
+  facet_wrap(~Location, scales="free") + 
+  labs(x="Number of P. acuta Species found near tile location", 
+       y="Logged Total of Recruits")
+
+recruits_by_PocCover_facet
+ggsave(here("Outputs", "RecruitmentTiles", "recruits_by_PocCover_facet.jpg"))
+
+
+
+```
+
+### create a similiar plot for recruits by just hard substrate 
+
+```{r}
+EnvData_wPocCover_long <- EnvData_wPocCover %>% 
+  pivot_longer(cols=Sand:HardSubstrate, names_to = "SubstrateType", values_to = "SubstrateValues")
+
+recruits_by_HardSubstrate <- EnvData_wPocCover_long %>% 
+  ggplot(aes(x=SubstrateValues, 
+             y=log(sum_total+1), 
+             color=SubstrateType)) + 
+  geom_point(size=3) + 
+  theme_classic() + 
+  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  geom_smooth(method=lm, 
+              fill="cornsilk3", 
+              alpha=0.2) + 
+  labs(x="Percent Cover of Hard Substrate vs Sand", 
+       y="Logged Total of Recruits")
+recruits_by_HardSubstrate
+
+ggsave(here("Outputs", "RecruitmentTiles", "recruits_by_SubstrateType.jpg"))
+
+
+```
+
+### what about just live coral cover? include Porites, etc 
+
+```{r}
+CommComp_recruit_coralcover <- PercentCover3 %>% 
+  left_join(RecruitmentCounts2.1, join_by(CowTagID, Location))
+
+CommComp_recruit_seasonavg_envdata_wLiveCover <- CommComp_recruit_coralcover %>% 
+  left_join(AllChemDataSeasonAvg_calculatedvalues, join_by(CowTagID)) 
+
+CommComp_recruit_coralcover_liveonly <- CommComp_recruit_coralcover %>% 
+  filter(comm_type=="LiveCoral", 
+         CowTagID!="CSEEP", CowTagID!="VSEEP")
+
+recruits_by_AllLiveCoral <- CommComp_recruit_coralcover_liveonly %>% 
+  ggplot(aes(x=percent_cover, 
+             y=log(sum_total+1), 
+             color=Location)) + 
+  geom_point(size=3) + 
+  theme_classic() + 
+  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  geom_smooth(method=lm, 
+              fill="cornsilk3", 
+              alpha=0.2) + 
+  labs(x="Percent Live Coral", 
+       y= "Log of Total Recruits")
+
+recruits_by_AllLiveCoral
+
+ggsave(here("Outputs", "RecruitmentTiles", "recruits_by_AllLiveCoral.jpg"))
+
+
+
+```
+
+
+
+
+
+
+
+
+
+

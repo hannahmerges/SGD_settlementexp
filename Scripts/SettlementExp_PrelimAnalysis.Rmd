@@ -84,7 +84,7 @@ SettlementCounts <- SettlementCounts %>%
   mutate(date = mdy(date))
 
 fulldata <- waterchemdata %>% 
-  full_join(SettlementCounts, join_by(treatmentID_rep, date))
+  full_join(SettlementCounts, join_by(treatmentID_rep, treatment_level, date)) #### not working perfecetly as of May 12th 2024 ---- not all water chem data is showing up 
 
 ###########################
 ## tidy data 
@@ -100,7 +100,7 @@ SettlementCounts <- SettlementCounts %>%
 ```
 
 
-#### quick visualizations 
+#### quick visualizations - updated May 12th, 2024
 ```{r}
 
 ###############################################
@@ -122,56 +122,81 @@ settlement_counts_sum <- SettlementCounts %>%
 #settlement_counts_sum <- settlement_counts_sum %>% 
 # sd(count)
 
-## not separated by day 
+## separated by site 
 settlement_plot <- settlement_counts_sum %>% 
+  drop_na(site) %>% 
   ggplot(aes(x=treatment_level,  
              y=count,
              fill=settlement_surface)) + 
   geom_col() + 
-  # facet_wrap(~spawning_day) + 
+  facet_wrap(~site) + 
   theme_bw() + 
   scale_fill_manual(values=pnw_palette("Sailboat")) + 
-  scale_x_discrete(limits=c("Ambient","Low","Medium", "High"))  
+  scale_x_discrete(limits=c("Ambient","Low","Medium", "High")) 
+
+settlement_plot
+ggsave(here("Outputs", "SettlementExperiment", "broadsettlement.jpg"), 
+       width=10, height=8)
 #geom_errorbar(aes(x=treatment_level, ymin=count-sd, ymax=count+sd), width=0.4)
 
-## separated by day to see if there are any differences across day 
+## separated by day and site to see if there are any differences across day 
 settlement_plot2 <- settlement_counts_sum %>% 
+  drop_na(spawning_day) %>% 
   ggplot(aes(x=treatment_level,  
              y=count,
              fill=settlement_surface)) + 
   geom_col() + 
-  facet_wrap(~spawning_day) + 
+  facet_wrap(site~spawning_day) + 
   theme_bw() + 
   scale_fill_manual(values=pnw_palette("Sailboat")) + 
   scale_x_discrete(limits=c("Ambient","Low","Medium", "High"))
+settlement_plot2
+ggsave(here("Outputs", "SettlementExperiment", "settlement_byday.jpg"), 
+       width=10, height=8)
 
 # group by swimming vs any settled 
 settlement_counts_mutated <- SettlementCounts %>% 
-  mutate(settled = plastic+mesh+top+bottom+side) %>%
+  mutate(settled = plastic_glue+mesh+top+bottom+side) %>%
   pivot_longer(cols = swimming|settled, names_to = "swim_noswim" , values_to = "count")
 
 settlement_plot3 <- settlement_counts_mutated %>% 
+  drop_na(site) %>% 
   ggplot(aes(x=treatment_level,  
              y=count,
              fill=swim_noswim)) + 
   geom_col() + 
-  #facet_wrap(~treatment_level) + 
+  facet_wrap(~site) + 
   theme_bw() + 
   scale_fill_manual(values=pnw_palette("Sailboat")) + 
   scale_x_discrete(limits=c("Ambient","Low","Medium", "High"))
+
+settlement_plot3
+ggsave(here("Outputs", "SettlementExperiment", "settlement_SwimnoSwim.jpg"), 
+       width=10, height=8)
 
 settlement_plot4 <- settlement_counts_mutated %>% 
+  drop_na(spawning_day, site) %>% 
   ggplot(aes(x=treatment_level,  
              y=count,
              fill=swim_noswim)) + 
   geom_col() + 
-  facet_wrap(~spawning_day) + 
+  facet_wrap(site~spawning_day) + 
   theme_bw() + 
   scale_fill_manual(values=pnw_palette("Sailboat")) + 
   scale_x_discrete(limits=c("Ambient","Low","Medium", "High"))
 
+settlement_plot4
+ggsave(here("Outputs", "SettlementExperiment", "settlement_SwimnoSwim_perday.jpg"), 
+       width=10, height=8)
 
-## THINGS TO DO BEFORE SHOWING PETE AND NYSSA 
+```
+
+
+
+
+## THINGS TO DO BEFORE SHOWING PETE AND NYSSA --- March 2024
+```{r}
+
 
 # add error bars 
 # load env data 
@@ -183,8 +208,10 @@ settlement_plot4 <- settlement_counts_mutated %>%
 # think about hourly effect of day 1-3 and also day of larval release 
 # plug in hypothetical, approximate nutrient values from respo data to see if pattern with nutrients 
 
+```
 
-
+## More plots and some models? 
+```{r}
 #### try making an ANOVA ####
 
 SettlementCounts1 <- SettlementCounts %>% 
@@ -194,7 +221,6 @@ SettlementCounts2 <- SettlementCounts %>%
   filter(spawning_day==3)
 
 anova_settlement <- aov(settled ~ treatment_level, data=SettlementCounts)
-
 summary(anova_settlement) 
 
 ### if do lmer, use anova rather than summary 
@@ -202,78 +228,105 @@ summary(anova_settlement)
 ## try to isolate difference between just ambient and low or med and high treatments for day 3 
 
 
+### not sure what is happening here 
+#plot <- SettlementCounts %>%
+ # ggplot(aes(x=treatment_level, y=settled, color=treatmentID_rep)) +
+ # geom_point() + 
+ # scale_x_discrete(limits=c("Ambient","Low","Medium", "High"))  
 
-SettlementCounts %>%
-  ggplot(aes(x=treatment_level, y=settled, color=treatmentID_rep)) +
-  geom_point() + 
-  scale_x_discrete(limits=c("Ambient","Low","Medium", "High"))  
-
-SettlementCounts %>% 
-  group_by(spawning_day, treatment_level) %>% 
+SettlementCounts_SEMean <- SettlementCounts %>% 
+  drop_na(site) %>% 
+  group_by(spawning_day, treatment_level, site) %>% 
   summarize(mean_settled = mean(settled, na.rm=TRUE), 
             mean_dead = mean(dead, na.rm=TRUE), 
             mean_swimming = mean(swimming, na.rm=TRUE), 
             se_settled = sd(settled, na.rm=TRUE)/sqrt(n()), 
             se_dead = sd(dead, na.rm=TRUE)/sqrt(n()), 
-            se_swimming = sd(swimming, na.rm=TRUE)/sqrt(n())) %>% 
-  ungroup() %>% 
-  ggplot(aes(x=spawning_day, y=mean_settled, color=treatment_level)) + 
+            se_swimming = sd(swimming, na.rm=TRUE)/sqrt(n()))
+
+SettlementCounts_avgs <- SettlementCounts_SEMean %>% 
+  ggplot(aes(x=spawning_day, 
+             y=mean_settled, 
+             color=treatment_level)) + 
   geom_point() + 
   geom_errorbar(aes(ymin=mean_settled-se_settled, ymax=mean_settled+se_settled), width=0.1) + 
   scale_color_discrete(limits=c("Ambient","Low","Medium", "High"))  + 
-  facet_wrap(~treatment_level)
+  facet_wrap(site~treatment_level)
 
-SettlementCounts %>% 
+SettlementCounts_avgs
+
+ggsave(here("Outputs", "SettlementExperiment", "avg_counts_by_site_and_day.jpg"), 
+       width=10, height=8)
+
+
+
+ambientonly_meansettlement < - SettlementCounts_SEMean %>% 
   filter(treatment_level== "Ambient") %>% 
-  group_by(spawning_day) %>% 
-  summarize(mean_settled = mean(settled, na.rm=TRUE), 
-            mean_dead = mean(dead, na.rm=TRUE), 
-            mean_swimming = mean(swimming, na.rm=TRUE), 
-            se_settled = sd(settled, na.rm=TRUE)/sqrt(n()), 
-            se_dead = sd(dead, na.rm=TRUE)/sqrt(n()), 
-            se_swimming = sd(swimming, na.rm=TRUE)/sqrt(n())) %>% 
-  ungroup() %>% 
   ggplot(aes(x=spawning_day, y=mean_settled)) + 
   geom_point() + 
-  geom_errorbar(aes(ymin=mean_settled-se_settled, ymax=mean_settled+se_settled), width=0.1)  
+  geom_errorbar(aes(ymin=mean_settled-se_settled, ymax=mean_settled+se_settled), width=0.1)  + 
+  facet_wrap(~site)
+
+ambientonly_meansettlement
+ggsave(here("Outputs", "SettlementExperiment", "ambientonly_meansettlement.jpg"), 
+       width=10, height=8)
 # scale_color_discrete(limits=c("Ambient","Low","Medium", "High"))
 #facet_wrap(~treatment_level)
 
 ## errors and percent averages across replicates 
 ## box plot of total settlers 
 settlement_counts_mutated <- SettlementCounts %>% 
-  mutate(settled = plastic+mesh+top+bottom+side) %>%
+  mutate(settled = plastic_glue+mesh+top+bottom+side) %>%
   mutate(dead=20-(swimming+settled)) %>% 
   pivot_longer(cols = swimming|dead|settled, names_to = "swim_settled_dead" , values_to = "count")
 
-settlement_counts_mutated %>%
-  ggplot(aes(x=treatment_level, y=count, fill=swim_settled_dead)) +
+settlement_counts_mutated1 <- settlement_counts_mutated %>%
+  drop_na(spawning_day) %>% 
+  ggplot(aes(x=treatment_level, 
+             y=count, 
+             fill=swim_settled_dead)) +
   geom_boxplot() +
   scale_fill_viridis(discrete = TRUE, alpha=0.6, option="A") +
   ggtitle("Settlers vs Swimmers vs Presumed Dead") + 
-  facet_wrap(swim_settled_dead~spawning_day, scales ="free_y") + 
-  scale_x_discrete(limits=c("Ambient","Low","Medium", "High"))  
+  facet_wrap(spawning_day~site, scales ="free_y") + 
+  scale_x_discrete(limits=c("Ambient","Low","Medium", "High")) 
+
+settlement_counts_mutated1
+ggsave(here("Outputs", "SettlementExperiment", "boxplots.jpg"), 
+       width=10, height=8)
 
 # just the settlers 
 settlement_counts_mutated2 <- SettlementCounts %>% 
-  mutate(settled = plastic+mesh+top+bottom+side) %>% 
-  pivot_longer(cols = settled, names_to = "settled" , values_to = "count")
+  mutate(settled = plastic_glue+mesh+top+bottom+side) %>% 
+  pivot_longer(cols = settled, names_to = "settled" , values_to = "count") %>% 
+  drop_na(site)
 
-settlement_counts_mutated2 %>%
+settlement_counts_mutated_plot2 <- settlement_counts_mutated2 %>%
   ggplot(aes(x=treatment_level, y=count, fill=settled)) +
   geom_boxplot() +
   scale_fill_viridis(discrete = TRUE, alpha=0.6, option="A") +
   ggtitle("Settlers") + 
-  scale_x_discrete(limits=c("Ambient","Low","Medium", "High"))
+  scale_x_discrete(limits=c("Ambient","Low","Medium", "High")) + 
+  facet_wrap(~site)
+
+settlement_counts_mutated_plot2
+ggsave(here("Outputs", "SettlementExperiment", "boxplots2.jpg"), 
+       width=10, height=8)
 
 settlement_by_day <- settlement_counts_mutated2 %>%
-  ggplot(aes(x=treatment_level, y=count, fill=settled)) +
+  ggplot(aes(x=treatment_level, 
+             y=count, 
+             fill=settled)) +
   geom_boxplot() +
   scale_fill_viridis(discrete = TRUE, alpha=0.6, option="A") +
-  facet_wrap(~spawning_day) +
+  facet_wrap(site~spawning_day) +
   ggtitle("Settlers") + 
-  scale_x_discrete(limits=c("Ambient","Low","Medium", "High"))
+  scale_x_discrete(limits=c("Ambient","Low","Medium", "High")) 
+settlement_by_day
+
+ggsave(here("Outputs", "SettlementExperiment", "boxplots3_byday.jpg"), 
+       width=10, height=8)
+
+
 ```
-
-
 
