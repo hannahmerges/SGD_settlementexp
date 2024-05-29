@@ -1,0 +1,41 @@
+---
+title: "SettlementModels_EnvParams"
+author: "Hannah Merges"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE)
+```
+
+## Load libraries 
+```{r}
+library(patchwork)
+library(tidyverse)
+library(here)
+library(PNWColors)
+library(viridis)
+library(car)
+library(lme4)
+library(lmerTest)
+library(modelsummary)
+library(tidymodels)
+library(flextable)
+library(performance)
+library(agricolae)
+library(patchwork)
+library(broom)
+library(stringr)
+library(emmeans)
+
+```
+
+## Read in Data 
+```{r}
+
+```
+
+

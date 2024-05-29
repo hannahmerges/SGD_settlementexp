@@ -204,10 +204,10 @@ AllChemDataSeasonAvg_calculatedvalues <- AllChemData_seasonaverage %>%
             TA_avg = mean(TA), 
             pH_avg = mean(pH), 
             phos_avg = mean(Phosphate_umolL), 
-            NN_avg = mean(NN_umolL), 
+            NN_avg = mean(NN_umolL),  
             silicate_avg= mean(Silicate_umolL), 
-            ammonia_avg = mean(Ammonia_umolL), 
-            sal_max = max(Salinity), 
+            ammonia_avg = mean(Ammonia_umolL),  
+            sal_max = max(Salinity),
             temp_max = max(Temperature), 
             TA_max = max(TA), 
             pH_max = max(pH), 
@@ -220,13 +220,13 @@ AllChemDataSeasonAvg_calculatedvalues <- AllChemData_seasonaverage %>%
             TA_min = min(TA), 
             pH_min = min(pH), 
             phos_min = min(Phosphate_umolL), 
-            NN_min = min(NN_umolL), 
+            NN_min = min(NN_umolL),
             silicate_min= min(Silicate_umolL), 
             ammonia_min = min(Ammonia_umolL), 
             sal_CV = ((sd(Salinity)/mean(Salinity))/100), 
             temp_CV = ((sd(Temperature)/mean(Temperature))/100), 
             TA_CV = ((sd(TA)/mean(TA))/100), 
-            pH_CV = ((sd(pH)/mean(pH))/100), 
+            pH_CV = ((sd(pH)/mean(pH))/100),
             phos_CV = ((sd(Phosphate_umolL)/mean(Phosphate_umolL))/100), 
             NN_CV = ((sd(NN_umolL)/mean(NN_umolL))/100), 
             silicate_CV= ((sd(Silicate_umolL)/mean(Silicate_umolL))/100), 
@@ -237,9 +237,52 @@ AllChemDataSeasonAvg_calculatedvalues <- AllChemData_seasonaverage %>%
             pH_sd = sd(pH), 
             phos_sd = sd(Phosphate_umolL), 
             NN_sd = sd(NN_umolL), 
-            silicate_sd= sd(Silicate_umolL), 
+            silicate_sd= sd(Silicate_umolL),
             ammonia_sd = sd(Ammonia_umolL))
 
+##### FIGURE OUT HOW TO PROPERLY USE na.rm = TRUE 
+AllChemDataSeasonAvg_calculatedvalues2 <- AllChemData_seasonaverage %>% 
+  group_by(CowTagID) %>% 
+  summarize(sal_avg = mean(Salinity, na.rm=TRUE), 
+            temp_avg = mean(Temperature, na.rm=TRUE), 
+            TA_avg = mean(TA, na.rm=TRUE), 
+            pH_avg = mean(pH, na.rm=TRUE), 
+            phos_avg = mean(Phosphate_umolL, na.rm=TRUE), 
+            NN_avg = mean(NN_umolL, na.rm=TRUE),  
+            silicate_avg= mean(Silicate_umolL, na.rm=TRUE), 
+            ammonia_avg = mean(Ammonia_umolL, na.rm=TRUE),  
+            sal_max = max(Salinity, na.rm=TRUE),
+            temp_max = max(Temperature, na.rm=TRUE), 
+            TA_max = max(TA, na.rm=TRUE), 
+            pH_max = max(pH, na.rm=TRUE), 
+            phos_max = max(Phosphate_umolL, na.rm=TRUE), 
+            NN_max = max(NN_umolL, na.rm=TRUE), 
+            silicate_max= max(Silicate_umolL, na.rm=TRUE), 
+            ammonia_max = max(Ammonia_umolL, na.rm=TRUE), 
+            sal_min = min(Salinity, na.rm=TRUE), 
+            temp_min = min(Temperature, na.rm=TRUE), 
+            TA_min = min(TA, na.rm=TRUE), 
+            pH_min = min(pH, na.rm=TRUE), 
+            phos_min = min(Phosphate_umolL, na.rm=TRUE), 
+            NN_min = min(NN_umolL, na.rm=TRUE),
+            silicate_min= min(Silicate_umolL, na.rm=TRUE), 
+            ammonia_min = min(Ammonia_umolL, na.rm=TRUE), 
+            sal_CV = ((sd(Salinity, na.rm=TRUE)/mean(Salinity, na.rm=TRUE))/100), 
+            temp_CV = ((sd(Temperature, na.rm=TRUE)/mean(Temperature, na.rm=TRUE))/100), 
+            TA_CV = ((sd(TA, na.rm=TRUE)/mean(TA, na.rm=TRUE))/100), 
+            pH_CV = ((sd(pH, na.rm=TRUE)/mean(pH, na.rm=TRUE))/100),
+            phos_CV = ((sd(Phosphate_umolL, na.rm=TRUE)/mean(Phosphate_umolL, na.rm=TRUE))/100), 
+            NN_CV = ((sd(NN_umolL, na.rm=TRUE)/mean(NN_umolL, na.rm=TRUE))/100), 
+            silicate_CV= ((sd(Silicate_umolL, na.rm=TRUE)/mean(Silicate_umolL, na.rm=TRUE))/100), 
+            ammonia_CV = ((sd(Ammonia_umolL, na.rm=TRUE)/mean(Ammonia_umolL, na.rm=TRUE))/100), 
+            sal_sd = sd(Salinity, na.rm=TRUE), 
+            temp_sd = sd(Temperature, na.rm=TRUE), 
+            TA_sd = sd(TA, na.rm=TRUE), 
+            pH_sd = sd(pH, na.rm=TRUE), 
+            phos_sd = sd(Phosphate_umolL, na.rm=TRUE), 
+            NN_sd = sd(NN_umolL, na.rm=TRUE), 
+            silicate_sd= sd(Silicate_umolL, na.rm=TRUE),
+            ammonia_sd = sd(Ammonia_umolL, na.rm=TRUE))
 #### for March 
 #AllChemData_Marchedit <- AllChemData_March %>% 
  # select(!c("Top_Plate_ID":"Plate_Seep", "M_C":"Lignin_Like")) 
@@ -286,7 +329,7 @@ RecruitmentCounts2.1 <- RecruitmentCounts %>%
   summarise(sum_total = sum(Pocilloporidae+Poritidae+Acroporidae+Other), 
             sum_total_dead = sum(Dead), 
             sum_total_alive=sum(sum_total-sum_total_dead)) %>% 
-  write_csv(here("Data", "RecruitmentCounts2.1.csv"))
+  write_csv(here::here("Data", "RecruitmentCounts2.1.csv"))
 
 #RecruitmentCounts2 <- RecruitmentCounts %>% 
  # pivot_longer(cols = Pocilloporidae:Other, names_to = "coral_spp", values_to = "recruit_counts")

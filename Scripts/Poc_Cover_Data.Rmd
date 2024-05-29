@@ -30,28 +30,35 @@ library(ggbiplot)
 
 ### Load Data
 ```{r}
-EnvData_wrecruitcounts <- read_csv(here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
 
-Poc_cover_data <- read_csv(here("Data", "Species_Composition_2022_Danielle.csv"))
+Poc_cover_data <- read_csv(here::here("Data", "Species_Composition_2022_Danielle.csv"))
 
 PercentCover <- read_csv("https://raw.githubusercontent.com/dbarnas/Community_Functional_Diversity/main/Data/Full_Metadata.csv")
 
-PercentCover3 <- read_csv(here("Data", "PercentCover3.csv"))
+PercentCover3 <- read_csv(here::here("Data", "PercentCover3.csv"))
 
-RecruitmentCounts2.1 <- read_csv((here("Data", "RecruitmentCounts2.1.csv")))
+RecruitmentCounts2.1 <- read_csv((here::here("Data", "RecruitmentCounts2.1.csv")))
 ```
 
 ## Tidy data and join in Danielle's Poc cover data 
+a) filter out the sand and hard substrate categories and b) sum the totals by cowtagid to get percent cover of the biotics 
 ```{r}
+Poc_cover_data2 <- Poc_cover_data %>% 
+  select(!c("Date", "PhotoNum", "Notes")) %>% 
+  filter(Taxa!="Bare Rock",Taxa!="Sand",Taxa!="Rubble", Location!="Varari_Maya") %>% 
+  group_by(CowTagID) %>% 
+  summarise(total_count_biotics = sum(SpeciesCounts, na.rm = TRUE)) 
 
-Poc_cover_data <- Poc_cover_data %>% 
-  filter(Taxa=="Pocillopora acuta", 
-         Location!="Varari_Maya") %>% 
-  select(!c("Date", "PhotoNum", "Notes")) 
+##### ^^ THIS IS NOT WORKING RIGHT NOW _ MAY 29th -- with GROUP BY FEATURE 
+ 
+Poc_cover_data3 <- Poc_cover_data2 %>% 
+  filter(Taxa=="Pocillopora acuta") %>% 
+  summarise(percent_cover = total_count_biotics/100)
 
 
 EnvData_wPocCover <- EnvData_wrecruitcounts %>% 
-  full_join(Poc_cover_data) %>% 
+  full_join(Poc_cover_data3) %>% 
   filter(CowTagID!= "CSEEP", CowTagID!= "VSEEP")
 
 ```
@@ -145,22 +152,76 @@ recruits_by_AllLiveCoral <- CommComp_recruit_coralcover_liveonly %>%
   geom_smooth(method=lm, 
               fill="cornsilk3", 
               alpha=0.2) + 
+  facet_wrap(~Location) + 
   labs(x="Percent Live Coral", 
        y= "Log of Total Recruits")
 
 recruits_by_AllLiveCoral
 
-ggsave(here("Outputs", "RecruitmentTiles", "recruits_by_AllLiveCoral.jpg"))
+ggsave(here::here("Outputs", "RecruitmentTiles", "recruits_by_AllLiveCoral.jpg"))
 
 
 
 ```
 
+#### run models comparing total live coral cover vs Poc cover at Varari 
+```{r}
+
+######################
+## all live coral including both sites 
+######################
+model_livecoral <- lm(log(sum_total+1) ~ percent_cover + Location, data= CommComp_recruit_coralcover_liveonly) 
+summary(model_livecoral)
+
+######################
+## just Varari 
+######################
+
+CommComp_recruit_coralcover_liveonly_V <- CommComp_recruit_coralcover_liveonly %>% 
+  filter(Location=="Varari")
+
+model_Vlivecoral <- lm(log(sum_total+1) ~ percent_cover, data= CommComp_recruit_coralcover_liveonly_V) 
+summary(model_Vlivecoral)
+
+######################
+## just Cabral 
+######################
+
+CommComp_recruit_coralcover_liveonly_C <- CommComp_recruit_coralcover_liveonly %>% 
+  filter(Location=="Cabral")
+
+model_Clivecoral <- lm(log(sum_total+1) ~ percent_cover, data= CommComp_recruit_coralcover_liveonly_C) 
+summary(model_Clivecoral)
+
+###################################################################
+######################
+## just Poc cover 
+######################
+EnvData_wPocCover_V <- EnvData_wPocCover %>% 
+  filter(Location=="Varari")
+
+model_VPocCover <- lm(log(sum_total+1) ~ SpeciesCounts, data= EnvData_wPocCover_V) 
+summary(model_VPocCover)
 
 
 
 
+EnvData_wPocCover_C <- EnvData_wPocCover %>% 
+  filter(Location=="Cabral")
 
+model_CPocCover <- lm(log(sum_total+1) ~ SpeciesCounts, data= EnvData_wPocCover_C) 
+summary(model_CPocCover)
+
+```
+
+
+### ^^ Results: 
+Varari: 
+- Poc cover: 0.044
+- Live coral: 0.0184
+Cabral: 
+- Poc cover: 0.54
+- Live coral: 0.44
 
 
 

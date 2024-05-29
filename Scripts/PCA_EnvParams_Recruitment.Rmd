@@ -28,7 +28,7 @@ library(ggbiplot)
 
 ### Load Data
 ```{r}
-EnvData_wrecruitcounts <- read_csv(here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
 
 ```
 
@@ -160,9 +160,8 @@ biplot(biogeochem_PCAmodel_V, xlab="PC1", ylab="PC2")
 
 biogeochem_PCAplot_V <- biogeochem_PCAmodel_V %>% 
   ggbiplot(obs.scale=1, 
-           var.scale=1, 
+           var.scale=1,
            groups=EnvData_wrecruitcounts_V$sum_total, 
-           ellipse=TRUE, 
            varname.size=3, 
            varname.adjust=1.2, 
            circle=FALSE) +
@@ -172,10 +171,11 @@ biogeochem_PCAplot_V <- biogeochem_PCAmodel_V %>%
   theme_classic() +
   theme(legend.direction = 'horizontal', 
         legend.position='bottom', 
-        legend.text=element_text(size=8)) 
+        legend.text=element_text(size=8)) + 
+  labs(title="Varari")
 
 biogeochem_PCAplot_V
-ggsave(here("Outputs", "RecruitmentTiles", "PCA_plot_V.jpg")) 
+ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_V.jpg")) 
 
 ```
 
@@ -242,21 +242,553 @@ biogeochem_PCAplot_C <- biogeochem_PCAmodel_C %>%
   theme_classic() +
   theme(legend.direction = 'horizontal', 
         legend.position='bottom', 
-        legend.text=element_text(size=8)) 
+        legend.text=element_text(size=8)) + 
+  labs(title="Cabral")
 
 biogeochem_PCAplot_C
-ggsave(here("Outputs", "RecruitmentTiles", "PCA_plot_C.jpg")) 
+ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_C.jpg")) 
 
 
+biogeochem_PCAplot_C + biogeochem_PCAplot_V
+ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_bothsites.jpg"), 
+       width=12, height=8) 
+
+```
+
+### PCA without temperature 
+```{r}
+EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+
+##### Varari 
+EnvData_wrecruitcounts3_V <- EnvData_wrecruitcounts %>% 
+  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  drop_na() %>% 
+  mutate(sum_total=log(sum_total+1)) %>% ## confirm if this should still be logged 
+  select(!c("temp_avg", "temp_sd")) %>% 
+  filter(Location=="Varari") %>% 
+  select(!"Location")
+
+EnvData_wrecruitcounts3_V$sum_total <- as.character(EnvData_wrecruitcounts3_V$sum_total)
+
+##### Cabral 
+EnvData_wrecruitcounts3_C <- EnvData_wrecruitcounts %>% 
+  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  drop_na() %>% 
+  mutate(sum_total=log(sum_total+1)) %>% ## confirm if this should still be logged 
+  select(!c("temp_avg", "temp_sd")) %>% 
+  filter(Location=="Cabral") %>% 
+  select(!"Location")
+
+EnvData_wrecruitcounts3_C$sum_total <- as.character(EnvData_wrecruitcounts3_C$sum_total)
+
+######################################################
+######################################################
+
+####################################
+#### PCA without temp at Varari 
+####################################
+biogeochem_notempV <- EnvData_wrecruitcounts3_V[,-1] # remove first and second columns so it is just biogeochem data to get PCs
+
+Vbiogeochem.scale_notemp <- scale(biogeochem_notempV, scale=TRUE, center=TRUE) ## convert all data to z-scores 
+
+biogeochem_PCAmodel_V_notemp <- princomp(Vbiogeochem.scale_notemp, cor=FALSE) # Run the PCA with `princomp()`
+
+summary(biogeochem_PCAmodel_V_notemp) ## look at the model
+# This shows amount of variance explained by each axis.
+
+plot(biogeochem_PCAmodel_V_notemp, type="lines")
+
+## prettier version 
+fviz_eig(biogeochem_PCAmodel_V_notemp)
+
+biogeochem_PCAmodel_V_notemp$loadings  # Shows the loadings of each trait on each PC 
+
+biogeochem_PCAmodel_V_notemp$scores # Gives output of the principal components for each individual
+
+# If we want to use the PC scores for something else (maybe we want to use PC1 to run an ANOVA?), then we can pull out that vector.
+Vbiogeochem_PC1_notemp <- biogeochem_PCAmodel_V_notemp$scores[,1] # Pulls out the first column of the table 
+Vbiogeochem_PC1_notemp
+
+# And we could run a quick ANOVA to see if biogeochem differ in PC1 scores. 
+# (This works because the ordering of rows in the PC scores table is the same 
+# as the order in the original data table.)
+
+biogeochem_model_V_notemp <- lm(Vbiogeochem_PC1_notemp~EnvData_wrecruitcounts3_V$sum_total)
+anova(biogeochem_model_V_notemp)
+
+biplot(biogeochem_PCAmodel_V_notemp, xlab="PC1", ylab="PC2")
+# The black numbers are each individual recruit total count. The red lines are the vectors for each biogeochem parameter 
+###########################
+
+biogeochem_PCAplot_V_notemp <- biogeochem_PCAmodel_V_notemp %>% 
+  ggbiplot(obs.scale=1, 
+           var.scale=1,
+           groups=EnvData_wrecruitcounts3_V$sum_total, 
+           varname.size=3, 
+           varname.adjust=1.2, 
+           circle=FALSE) +
+  scale_color_discrete(name='') +
+  geom_point(aes(colour=factor(EnvData_wrecruitcounts3_V$sum_total)), 
+             size = 3) + 
+  theme_classic() +
+  theme(legend.direction = 'horizontal', 
+        legend.position='bottom', 
+        legend.text=element_text(size=8)) + 
+  labs(title="Varari Without Temperature")
+
+biogeochem_PCAplot_V_notemp
+#ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_V.jpg")) 
+
+
+#########################
+## Cabral no temp 
+#########################
+
+biogeochem_notempC <- EnvData_wrecruitcounts3_C[,-1] # remove first and second columns so it is just biogeochem data to get PCs
+
+Cbiogeochem.scale_notemp <- scale(biogeochem_notempC, scale=TRUE, center=TRUE) ## convert all data to z-scores 
+
+biogeochem_PCAmodel_C_notemp <- princomp(Cbiogeochem.scale_notemp, cor=FALSE) # Run the PCA with `princomp()`
+
+summary(biogeochem_PCAmodel_C_notemp) ## look at the model
+# This shows amount of variance explained by each axis.
+
+plot(biogeochem_PCAmodel_C_notemp, type="lines")
+
+## prettier version 
+fviz_eig(biogeochem_PCAmodel_C_notemp)
+
+biogeochem_PCAmodel_C_notemp$loadings  # Shows the loadings of each trait on each PC 
+
+biogeochem_PCAmodel_C_notemp$scores # Gives output of the principal components for each individual
+
+# If we want to use the PC scores for something else (maybe we want to use PC1 to run an ANOVA?), then we can pull out that vector.
+Cbiogeochem_PC1_notemp <- biogeochem_PCAmodel_C_notemp$scores[,1] # Pulls out the first column of the table 
+Cbiogeochem_PC1_notemp
+
+# And we could run a quick ANOVA to see if biogeochem differ in PC1 scores. 
+# (This works because the ordering of rows in the PC scores table is the same 
+# as the order in the original data table.)
+
+biogeochem_model_C_notemp <- lm(Cbiogeochem_PC1_notemp~EnvData_wrecruitcounts3_C$sum_total)
+anova(biogeochem_model_C_notemp)
+
+biplot(biogeochem_PCAmodel_C_notemp, xlab="PC1", ylab="PC2")
+# The black numbers are each individual recruit total count. The red lines are the vectors for each biogeochem parameter 
+
+###########################
+###########################
+
+biogeochem_PCAplot_C_notemp <- biogeochem_PCAmodel_C_notemp %>% 
+  ggbiplot(obs.scale=1, 
+           var.scale=1,
+           groups=EnvData_wrecruitcounts3_C$sum_total, 
+           varname.size=3, 
+           varname.adjust=1.2, 
+           circle=FALSE) +
+  scale_color_discrete(name='') +
+  geom_point(aes(colour=factor(EnvData_wrecruitcounts3_C$sum_total)), 
+             size = 3) + 
+  theme_classic() +
+  theme(legend.direction = 'horizontal', 
+        legend.position='bottom', 
+        legend.text=element_text(size=8)) + 
+  labs(title="Cabral Without Temperature")
+
+biogeochem_PCAplot_C_notemp
+#ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_V.jpg")) 
+
+
+##########################################
+##########################################
+biogeochem_PCAplot_C_notemp + biogeochem_PCAplot_V_notemp
+
+```
+### remove all the sd and just use averages 
+```{r}
+
+EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+
+##### Varari 
+EnvData_wrecruitcounts3_V_avgonly <- EnvData_wrecruitcounts %>% 
+  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  drop_na() %>% 
+  mutate(sum_total=log(sum_total+1)) %>% ## confirm if this should still be logged 
+  select(!c("sal_sd":"ammonia_sd")) %>% 
+  filter(Location=="Varari") %>% 
+  select(!"Location")
+
+EnvData_wrecruitcounts3_V_avgonly$sum_total <- as.character(EnvData_wrecruitcounts3_V_avgonly$sum_total)
+
+##### Cabral 
+EnvData_wrecruitcounts3_C_avgonly <- EnvData_wrecruitcounts %>% 
+  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  drop_na() %>% 
+  mutate(sum_total=log(sum_total+1)) %>% ## confirm if this should still be logged 
+   select(!c("sal_sd":"ammonia_sd")) %>% 
+  filter(Location=="Cabral") %>% 
+  select(!"Location")
+
+EnvData_wrecruitcounts3_C_avgonly$sum_total <- as.character(EnvData_wrecruitcounts3_C_avgonly$sum_total)
+
+######################################################
+######################################################
+
+####################################
+#### PCA without temp at Varari 
+####################################
+biogeochem_V_avgonly <- EnvData_wrecruitcounts3_V_avgonly[,-1] # remove first and second columns so it is just biogeochem data to get PCs
+
+Vbiogeochem.scale_avgonly <- scale(biogeochem_V_avgonly, scale=TRUE, center=TRUE) ## convert all data to z-scores 
+
+biogeochem_PCAmodel_V_avgonly <- princomp(Vbiogeochem.scale_avgonly, cor=FALSE) # Run the PCA with `princomp()`
+
+summary(biogeochem_PCAmodel_V_avgonly) ## look at the model
+# This shows amount of variance explained by each axis.
+
+plot(biogeochem_PCAmodel_V_avgonly, type="lines")
+
+## prettier version 
+fviz_eig(biogeochem_PCAmodel_V_avgonly)
+
+biogeochem_PCAmodel_V_avgonly$loadings  # Shows the loadings of each trait on each PC 
+
+biogeochem_PCAmodel_V_avgonly$scores # Gives output of the principal components for each individual
+
+# If we want to use the PC scores for something else (maybe we want to use PC1 to run an ANOVA?), then we can pull out that vector.
+Vbiogeochem_PC1_avgonly <- biogeochem_PCAmodel_V_avgonly$scores[,1] # Pulls out the first column of the table 
+Vbiogeochem_PC1_avgonly
+
+# And we could run a quick ANOVA to see if biogeochem differ in PC1 scores. 
+# (This works because the ordering of rows in the PC scores table is the same 
+# as the order in the original data table.)
+
+biogeochem_model_V_avgonly <- lm(Vbiogeochem_PC1_avgonly~EnvData_wrecruitcounts3_V_avgonly$sum_total)
+anova(biogeochem_model_V_avgonly)
+
+biplot(biogeochem_PCAmodel_V_avgonly, xlab="PC1", ylab="PC2")
+# The black numbers are each individual recruit total count. The red lines are the vectors for each biogeochem parameter 
+###########################
+
+biogeochem_PCAplot_V_avgonly <- biogeochem_PCAmodel_V_avgonly %>% 
+  ggbiplot(obs.scale=1, 
+           var.scale=1,
+           groups=EnvData_wrecruitcounts3_V_avgonly$sum_total, 
+           varname.size=3, 
+           varname.adjust=1.2, 
+           circle=FALSE) +
+  scale_color_discrete(name='') +
+  geom_point(aes(colour=factor(EnvData_wrecruitcounts3_V_avgonly$sum_total)), 
+             size = 3) + 
+  theme_classic() +
+  theme(legend.direction = 'horizontal', 
+        legend.position='bottom', 
+        legend.text=element_text(size=8)) + 
+  labs(title="Varari Average Only")
+
+biogeochem_PCAplot_V_avgonly
+#ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_V.jpg")) 
+
+
+#########################
+## Cabral no temp 
+#########################
+
+biogeochem_Cavgonly <- EnvData_wrecruitcounts3_C_avgonly[,-1] # remove first and second columns so it is just biogeochem data to get PCs
+
+Cbiogeochem.scale_avgonly <- scale(biogeochem_Cavgonly, scale=TRUE, center=TRUE) ## convert all data to z-scores 
+
+biogeochem_PCAmodel_C_avgonly <- princomp(Cbiogeochem.scale_avgonly, cor=FALSE) # Run the PCA with `princomp()`
+
+summary(biogeochem_PCAmodel_C_avgonly) ## look at the model
+# This shows amount of variance explained by each axis.
+
+plot(biogeochem_PCAmodel_C_avgonly, type="lines")
+
+## prettier version 
+fviz_eig(biogeochem_PCAmodel_C_avgonly)
+
+biogeochem_PCAmodel_C_avgonly$loadings  # Shows the loadings of each trait on each PC 
+
+biogeochem_PCAmodel_C_avgonly$scores # Gives output of the principal components for each individual
+
+# If we want to use the PC scores for something else (maybe we want to use PC1 to run an ANOVA?), then we can pull out that vector.
+Cbiogeochem_PC1_avgonly <- biogeochem_PCAmodel_C_avgonly$scores[,1] # Pulls out the first column of the table 
+Cbiogeochem_PC1_avgonly
+
+# And we could run a quick ANOVA to see if biogeochem differ in PC1 scores. 
+# (This works because the ordering of rows in the PC scores table is the same 
+# as the order in the original data table.)
+
+biogeochem_model_C_avgonly <- lm(Cbiogeochem_PC1_avgonly~EnvData_wrecruitcounts3_C_avgonly$sum_total)
+anova(biogeochem_model_C_avgonly)
+
+biplot(biogeochem_PCAmodel_C_avgonly, xlab="PC1", ylab="PC2")
+# The black numbers are each individual recruit total count. The red lines are the vectors for each biogeochem parameter 
+
+###########################
+###########################
+
+biogeochem_PCAplot_C_avgonly <- biogeochem_PCAmodel_C_avgonly %>% 
+  ggbiplot(obs.scale=1, 
+           var.scale=1,
+           groups=EnvData_wrecruitcounts3_C_avgonly$sum_total, 
+           varname.size=3, 
+           varname.adjust=1.2, 
+           circle=FALSE) +
+  scale_color_discrete(name='') +
+  geom_point(aes(colour=factor(EnvData_wrecruitcounts3_C_avgonly$sum_total)), 
+             size = 3) + 
+  theme_classic() +
+  theme(legend.direction = 'horizontal', 
+        legend.position='bottom', 
+        legend.text=element_text(size=8)) + 
+  labs(title="Cabral Average Only")
+
+biogeochem_PCAplot_C_avgonly
+#ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_V.jpg")) 
+
+
+##########################################
+##########################################
+biogeochem_PCAplot_C_avgonly + biogeochem_PCAplot_V_avgonly
 
 ```
 
 
+#### remove all the sd and just use averages  MINUS temperature 
+```{r}
+
+EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+
+##### Varari 
+EnvData_wrecruitcounts3_V_avgonly_notemp <- EnvData_wrecruitcounts %>% 
+  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  drop_na() %>% 
+  mutate(sum_total=log(sum_total+1)) %>% ## confirm if this should still be logged 
+  select(!c("sal_sd":"ammonia_sd", "temp_avg")) %>% 
+  filter(Location=="Varari") %>% 
+  select(!"Location")
+
+EnvData_wrecruitcounts3_V_avgonly_notemp$sum_total <- as.character(EnvData_wrecruitcounts3_V_avgonly_notemp$sum_total)
+
+##### Cabral 
+EnvData_wrecruitcounts3_C_avgonly_notemp <- EnvData_wrecruitcounts %>% 
+  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  drop_na() %>% 
+  mutate(sum_total=log(sum_total+1)) %>% ## confirm if this should still be logged 
+   select(!c("sal_sd":"ammonia_sd", "temp_avg")) %>% 
+  filter(Location=="Cabral") %>% 
+  select(!"Location")
+
+EnvData_wrecruitcounts3_C_avgonly_notemp$sum_total <- as.character(EnvData_wrecruitcounts3_C_avgonly_notemp$sum_total)
+
+######################################################
+######################################################
+
+####################################
+#### PCA without temp at Varari 
+####################################
+biogeochem_V_avgonly_notemp <- EnvData_wrecruitcounts3_V_avgonly_notemp[,-1] # remove first and second columns so it is just biogeochem data to get PCs
+
+Vbiogeochem.scale_avgonly_notemp <- scale(biogeochem_V_avgonly_notemp, scale=TRUE, center=TRUE) ## convert all data to z-scores 
+
+biogeochem_PCAmodel_V_avgonly_notemp <- princomp(Vbiogeochem.scale_avgonly_notemp, cor=FALSE) # Run the PCA with `princomp()`
+
+summary(biogeochem_PCAmodel_V_avgonly_notemp) ## look at the model
+# This shows amount of variance explained by each axis.
+
+plot(biogeochem_PCAmodel_V_avgonly_notemp, type="lines")
+
+## prettier version 
+fviz_eig(biogeochem_PCAmodel_V_avgonly_notemp)
+
+biogeochem_PCAmodel_V_avgonly_notemp$loadings  # Shows the loadings of each trait on each PC 
+
+biogeochem_PCAmodel_V_avgonly_notemp$scores # Gives output of the principal components for each individual
+
+# If we want to use the PC scores for something else (maybe we want to use PC1 to run an ANOVA?), then we can pull out that vector.
+Vbiogeochem_PC1_avgonly_notemp <- biogeochem_PCAmodel_V_avgonly_notemp$scores[,1] # Pulls out the first column of the table 
+Vbiogeochem_PC1_avgonly_notemp
+
+# And we could run a quick ANOVA to see if biogeochem differ in PC1 scores. 
+# (This works because the ordering of rows in the PC scores table is the same 
+# as the order in the original data table.)
+
+biogeochem_model_V_avgonly_notemp <- lm(Vbiogeochem_PC1_avgonly_notemp~EnvData_wrecruitcounts3_V_avgonly_notemp$sum_total)
+anova(biogeochem_model_V_avgonly_notemp)
+
+biplot(biogeochem_PCAmodel_V_avgonly_notemp, xlab="PC1", ylab="PC2")
+# The black numbers are each individual recruit total count. The red lines are the vectors for each biogeochem parameter 
+###########################
+
+biogeochem_PCAplot_V_avgonly_notemp <- biogeochem_PCAmodel_V_avgonly_notemp %>% 
+  ggbiplot(obs.scale=1, 
+           var.scale=1,
+           groups=EnvData_wrecruitcounts3_V_avgonly_notemp$sum_total, 
+           varname.size=3, 
+           varname.adjust=1.2, 
+           circle=FALSE) +
+  scale_color_discrete(name='') +
+  geom_point(aes(colour=factor(EnvData_wrecruitcounts3_V_avgonly_notemp$sum_total)), 
+             size = 3) + 
+  theme_classic() +
+  theme(legend.direction = 'horizontal', 
+        legend.position='bottom', 
+        legend.text=element_text(size=8)) + 
+  labs(title="Varari Average Only Without Temperature")
+
+biogeochem_PCAplot_V_avgonly_notemp
+#ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_V.jpg")) 
 
 
+#########################
+## Cabral no temp 
+#########################
+
+biogeochem_Cavgonly_notemp <- EnvData_wrecruitcounts3_C_avgonly_notemp[,-1] # remove first and second columns so it is just biogeochem data to get PCs
+
+Cbiogeochem.scale_avgonly_notemp <- scale(biogeochem_Cavgonly_notemp, scale=TRUE, center=TRUE) ## convert all data to z-scores 
+
+biogeochem_PCAmodel_C_avgonly_notemp <- princomp(Cbiogeochem.scale_avgonly_notemp, cor=FALSE) # Run the PCA with `princomp()`
+
+summary(biogeochem_PCAmodel_C_avgonly_notemp) ## look at the model
+# This shows amount of variance explained by each axis.
+
+plot(biogeochem_PCAmodel_C_avgonly_notemp, type="lines")
+
+## prettier version 
+fviz_eig(biogeochem_PCAmodel_C_avgonly_notemp)
+
+biogeochem_PCAmodel_C_avgonly_notemp$loadings  # Shows the loadings of each trait on each PC 
+
+biogeochem_PCAmodel_C_avgonly_notemp$scores # Gives output of the principal components for each individual
+
+# If we want to use the PC scores for something else (maybe we want to use PC1 to run an ANOVA?), then we can pull out that vector.
+Cbiogeochem_PC1_avgonly_notemp <- biogeochem_PCAmodel_C_avgonly_notemp$scores[,1] # Pulls out the first column of the table 
+Cbiogeochem_PC1_avgonly_notemp
+
+# And we could run a quick ANOVA to see if biogeochem differ in PC1 scores. 
+# (This works because the ordering of rows in the PC scores table is the same 
+# as the order in the original data table.)
+
+biogeochem_model_C_avgonly_notemp <- lm(Cbiogeochem_PC1_avgonly_notemp~EnvData_wrecruitcounts3_C_avgonly_notemp$sum_total)
+anova(biogeochem_model_C_avgonly_notemp)
+
+biplot(biogeochem_PCAmodel_C_avgonly_notemp, xlab="PC1", ylab="PC2")
+# The black numbers are each individual recruit total count. The red lines are the vectors for each biogeochem parameter 
+
+###########################
+###########################
+
+biogeochem_PCAplot_C_avgonly_notemp <- biogeochem_PCAmodel_C_avgonly_notemp %>% 
+  ggbiplot(obs.scale=1, 
+           var.scale=1,
+           groups=EnvData_wrecruitcounts3_C_avgonly_notemp$sum_total, 
+           varname.size=3, 
+           varname.adjust=1.2, 
+           circle=FALSE) +
+  scale_color_discrete(name='') +
+  geom_point(aes(colour=factor(EnvData_wrecruitcounts3_C_avgonly_notemp$sum_total)), 
+             size = 3) + 
+  theme_classic() +
+  theme(legend.direction = 'horizontal', 
+        legend.position='bottom', 
+        legend.text=element_text(size=8)) + 
+  labs(title="Cabral Average Only Without Temperature")
+
+biogeochem_PCAplot_C_avgonly_notemp
+ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_C_notemp_avgs.jpg")) 
 
 
+##########################################
+##########################################
+biogeochem_PCAplot_C_avgonly_notemp + biogeochem_PCAplot_V_avgonly_notemp
 
+
+```
+
+#### take the scores of PC1 and PC2 and plot as independent vars against log recruitment 
+
+```{r}
+### turn the PCA scores into df 
+############ for Cabral first 
+Cbiogeochem_PC1_avgonly_notemp <- biogeochem_PCAmodel_C_avgonly_notemp$scores[,c(1,2)]
+
+C_PC1_df <- data.frame(Cbiogeochem_PC1_avgonly_notemp)
+
+### now need to include logged recruit counts 
+
+C_PC1_df2 <- C_PC1_df %>% 
+  mutate(sum_total=c(3.4011974, 2.4849066, 1.0986123,2.8332133,2.7080502, 2.3978953, 3.7612001, 1.0986123, 0.0000000, 4.9904326, 0.6931472, 1.0986123, 1.9459101, 2.9444390, 2.1972246, 2.3025851, 1.3862944))
+
+C_PC1_df2_long <- C_PC1_df2 %>% 
+  pivot_longer(cols=Comp.1:Comp.2, names_to = "Comp1_2", values_to = "PCA_scores")
+
+############ for Varari next  
+Vbiogeochem_PC1_avgonly_notemp <- biogeochem_PCAmodel_V_avgonly_notemp$scores[,c(1,2)]
+
+V_PC1_df <- data.frame(Vbiogeochem_PC1_avgonly_notemp)
+
+V_PC1_df2 <- V_PC1_df %>% 
+  mutate(sum_total=c(4.543295, 4.143135, 4.077537, 4.882802, 1.098612, 3.526361, 3.135494, 2.079442, 2.639057, 1.791759, 4.574711, 1.609438, 3.332205, 3.806662, 3.496508, 1.098612, 2.995732))
+
+V_PC1_df2_long <- V_PC1_df2 %>% 
+  pivot_longer(cols=Comp.1:Comp.2, names_to = "Comp1_2", values_to = "PCA_scores")
+
+#########################################################
+#########################################################
+
+########### ggplot ##################
+V_PCscores_recruits <- V_PC1_df2_long %>% 
+  ggplot(aes(x=PCA_scores, 
+             y=sum_total, 
+             color=Comp1_2)) + 
+  geom_point(size=3) + 
+  theme_bw() + 
+  facet_wrap(~Comp1_2) + 
+  labs(title="Varari") + 
+  geom_smooth(method="lm", formula="y~poly(x,2)")
+  
+V_PCscores_recruits
+
+
+### for Cabral 
+############ ggplot 
+
+C_PCscores_recruits <- C_PC1_df2_long %>% 
+  ggplot(aes(x=PCA_scores, 
+             y=sum_total, 
+             color=Comp1_2)) + 
+  geom_point(size=3) + 
+  theme_bw() + 
+  facet_wrap(~Comp1_2) + 
+  labs(title="Cabral") + 
+  geom_smooth(method="lm")
+  
+C_PCscores_recruits
+ggsave(here("Outputs", "RecruitmentTiles", "CabralPCscores.jpg"))
+
+C_PCscores_recruits / V_PCscores_recruits
+
+```
+
+## are these models significant? 
+```{r}
+### Varari 
+V_PCAmodel <- lm(sum_total ~ PCA_scores * Comp1_2 ,data = V_PC1_df2_long)
+summary(V_PCAmodel)
+
+V_PCAmodel2 <- lm(sum_total ~ poly(Comp.1, degree=2) ,data = V_PC1_df2)
+summary(V_PCAmodel2)
+
+## Cabral 
+C_PCAmodel2 <- lm(sum_total ~ Comp.1 ,data = C_PC1_df2)
+summary(C_PCAmodel2)
+
+```
+
+### BRING IN 3 tiles missing 
 
 
 
