@@ -1,0 +1,181 @@
+---
+title: "SGD Grouping with Recruitment Tiles"
+author: "Hannah Merges"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE)
+```
+
+## Load libraries 
+```{r}
+library(patchwork)
+library(tidyverse)
+library(here)
+library(PNWColors)
+library(agricolae)
+library(lme4)
+library(lmerTest)
+library(modelsummary)
+library(performance)
+library(purrr)
+library(nlstools)
+library(stringr)
+library(emmeans)
+library(modelr)
+```
+
+## Bring in datasets
+```{r}
+RecruitmentCounts <- read_csv(here("Data","Recruitment_Tiles_Counts.csv"))
+EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+
+AllChemData_August <- read_csv("https://raw.githubusercontent.com/njsilbiger/MooreaSGD_site-selection/main/Data/August2021/Allbiogeochemdata_QC.csv")
+AllChemData_March <- read_csv("https://raw.githubusercontent.com/njsilbiger/MooreaSGD_site-selection/main/Data/March2022/Allbiogeochemdata_QC_march_fdom2.csv")
+
+```
+
+## Define groupings to have SGD categories 
+- Because without groupings, each tile stands alone as its own replicate which is not strong statistically 
+- So make three groups of low medium and high groundwater... maybe based on silicate? 
+
+```{r}
+
+## edit old dfs to remove all unnecessary information 
+AllChemData_August_edit <- AllChemData_August %>% 
+  dplyr::select(c(1,4,19))
+
+AllChemData_March_edit <- AllChemData_March %>% 
+  dplyr::select(c(1,4,21))
+
+
+FullChem <- AllChemData_August_edit %>% 
+  full_join(AllChemData_March_edit)
+
+## now group by Cow Tag ID and average across season and tides to get one value for each CowTag
+FullChem_avg <- FullChem %>% 
+  drop_na() %>% 
+  filter(CowTagID!="VRC",CowTagID!="VSEEP",CowTagID!="VSPRING",CowTagID!="Varari_Well",CowTagID!="CSPRING_ROAD",CowTagID!="CSPRING_BEACH2",CowTagID!="CSPRING_BEACH",CowTagID!="CSPRING",CowTagID!="CSEEP",CowTagID!="CRC",CowTagID!="CPIT_Bottom",CowTagID!="CPIT") %>% 
+  group_by(CowTagID, Location) %>% 
+  summarize(Silicate_umolL = mean(Silicate_umolL))
+
+## separate out Varari and Cabral 
+FullChem_avg_V <- FullChem_avg %>% 
+  filter(Location=="Varari")
+
+
+FullChem_avg_C <- FullChem_avg %>% 
+  filter(Location=="Cabral")
+
+############################
+## now create groupings 
+############################
+# 20 plates/CowTags, 3 groups --> ~6 per group 
+
+FullChem_avg_C_org <- arrange(FullChem_avg_C, Silicate_umolL)
+#write_csv(FullChem_avg_C_org, here::here("Data", "FullChem_avg_C.csv"))
+FullChem_avg_C_SGDlevel <- read_csv(here("Data", "FullChem_avg_C.csv"))
+
+FullChem_avg_V_org <- arrange(FullChem_avg_V, Silicate_umolL)
+#write_csv(FullChem_avg_V_org, here::here("Data", "FullChem_avg_V.csv"))
+FullChem_avg_V_SGDlevel <- read_csv(here("Data", "FullChem_avg_V.csv"))
+
+
+### join them together 
+SGDlevels_bothsites <- FullChem_avg_V_SGDlevel %>% 
+  full_join(FullChem_avg_C_SGDlevel)
+```
+
+### Groupings = 
+Cabral: 
+- Low = C6, C15, C18, C7, C9, C3 (<2.5)
+- Medium = C14, C12, C11, C9, C16, C8 ( 2.5 < x < 4.0 ) 
+- High = C20, C4, C1, C5, C10, C17, C13, C2 (>4.0)
+
+Varari: 
+- Low = V19, V16, V4, V20, V9, V12, V10 (<1.5)
+- Medium = V13, V5, V3, V11, V2, V15, V1 ( 1.5 < x < 2.5)
+- High = V8, V18, V6, V14, V17, V7 (> 2.5) 
+
+### Bring in recruitment data to link with low medium and high categories  
+
+```{r}
+EnvData_wrecruitcounts_edited <- EnvData_wrecruitcounts %>% 
+  dplyr::select(c(1:5))
+
+### join recruitment data with env data 
+Grouped_recruitment <- SGDlevels_bothsites %>% 
+  full_join(EnvData_wrecruitcounts_edited)
+
+```
+
+### Plot it out so can see differences by SGD groups 
+```{r}
+### ONE way is to total ALL the receruits for the plates in that SGD group
+Grouped_recruitment_totaled <- Grouped_recruitment %>% 
+  group_by(SGD_level, Location) %>% 
+  summarize(grouptotal= sum(sum_total), 
+            groupdead = sum(sum_total_dead), 
+            groupalive = sum(sum_total_alive))
+
+plot1_recruitsbySGDlevels <- Grouped_recruitment_totaled %>% 
+  ggplot(aes(x=SGD_level, 
+             y=grouptotal, 
+             fill=Location)) + 
+  geom_col() + 
+  theme_classic() + 
+  facet_wrap(~Location) + 
+  scale_x_discrete(limits=c("Low","Medium", "High")) + 
+  labs(title = "Total Settlers by SGD Level") + 
+  scale_fill_manual(values=c("gold2", "firebrick4"))
+
+plot1_recruitsbySGDlevels
+
+### ANOTHER WAY is to look at total alive vs total dead 
+
+## pivot df to useful orientation 
+Grouped_recruitment_totaled_pivot <- Grouped_recruitment_totaled %>% 
+  pivot_longer(cols = groupdead:groupalive, names_to = "Dead_Alive", values_to="deadalive_counts")
+
+plot2_recruitsbySGDlevels <- Grouped_recruitment_totaled_pivot %>% 
+  ggplot(aes(x=SGD_level, 
+             y=deadalive_counts, 
+             fill=Dead_Alive)) + 
+  geom_col(position="dodge") + 
+  theme_classic() + 
+  facet_wrap(~Location) + 
+  scale_x_discrete(limits=c("Low","Medium", "High")) + 
+  labs(title = "Dead vs Alive Settlers by SGD Level") + 
+  scale_fill_manual(values=c("coral3", "gray"))
+
+plot2_recruitsbySGDlevels
+
+plot2_recruitsbySGDlevels + plot1_recruitsbySGDlevels
+ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "RecruitCountsbySGDlevel.jpg"), 
+       width=10, height=7)
+
+```
+
+
+### create model to test for significance 
+```{r}
+SGDlevel_recruits_model <- lm(sum_total ~ SGD_level*Location, data = Grouped_recruitment)
+
+summary(SGDlevel_recruits_model)
+Anova(SGDlevel_recruits_model, type = "III")
+
+plot(SGDlevel_recruits_model)
+qqp(SGDlevel_recruits_model)
+
+AIC(SGDlevel_recruits_model)
+
+```
+
+
+
+
+

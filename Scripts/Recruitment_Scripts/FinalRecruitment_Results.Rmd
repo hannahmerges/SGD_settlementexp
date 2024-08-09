@@ -1,0 +1,112 @@
+---
+title: "FinalRecruitment_Results"
+author: "Hannah Merges"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Load libraries 
+```{r}
+library(patchwork)
+library(tidyverse)
+library(here)
+library(PNWColors)
+library(agricolae)
+library(lme4)
+library(lmerTest)
+library(modelsummary)
+library(performance)
+library(purrr)
+library(nlstools)
+library(stringr)
+library(emmeans)
+library(modelr)
+```
+
+## Bring in datasets
+```{r}
+RecruitmentCounts <- read_csv(here::here("Data","Recruitment_Tiles_Counts.csv"))
+
+AllChemData_August <- read_csv("https://raw.githubusercontent.com/njsilbiger/MooreaSGD_site-selection/main/Data/August2021/Allbiogeochemdata_QC.csv")
+
+AllChemData_March <- read_csv("https://raw.githubusercontent.com/njsilbiger/MooreaSGD_site-selection/main/Data/March2022/Allbiogeochemdata_QC_march_fdom2.csv")
+
+pH <- read_csv(here::here("Data", "pHSlope.csv"))
+
+EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+
+Poc_cover_data <- read_csv(here::here("Data", "Species_Composition_2022_Danielle.csv"))
+
+PercentCover <- read_csv("https://raw.githubusercontent.com/dbarnas/Community_Functional_Diversity/main/Data/Full_Metadata.csv")
+
+PercentCover3 <- read_csv(here::here("Data", "PercentCover3.csv"))
+
+RecruitmentCounts2.1 <- read_csv((here::here("Data", "RecruitmentCounts2.1.csv")))
+
+EnvData_wPocCover <- read_csv(here::here("Data", "EnvData_wPocCover.csv"))
+```
+
+## Figure 1: Poc Cover Data 
+
+```{r}
+
+recruits_by_PocCover <- EnvData_wPocCover %>% 
+  ggplot(aes(x=percent_cover, 
+             y=log(sum_total+1), 
+             color=Location)) + 
+  geom_point(size=3) + 
+  theme_classic() + 
+  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  geom_smooth(method=lm, 
+              fill="cornsilk3", 
+              alpha=0.2) + ## alpha adjusts the transparency 
+  labs(x="% Cover of P. acuta Species found near tile location", 
+       y="Logged Total of Recruits")
+
+recruits_by_PocCover
+ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "recruits_by_PocCover.jpg"))
+
+
+### run models here 
+
+
+```
+
+
+### Silicate on x, recruit on y 
+
+```{r}
+
+recruits_by_silicate <- EnvData_wPocCover %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=log(sum_total+1), 
+             color=Location)) + 
+  geom_point(size=3) + 
+  theme_classic() + 
+  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  geom_smooth(method=lm,
+              formula="y~poly(x,2)",
+              fill="cornsilk3", 
+              alpha=0.2) + ## alpha adjusts the transparency 
+  labs(x="Avg Silicate", 
+       y="Logged Total of Recruits")
+
+recruits_by_silicate
+
+
+silicate_recruit_model <- lm(log(sum_total+1) ~ silicate_avg, data=EnvData_wPocCover %>% 
+                               filter(Location=="Varari"))
+
+summary(silicate_recruit_model)
+
+
+recruits_by_silicate + recruits_by_PocCover
+ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "PocCoverANDSilicate.jpg"), 
+       width=10, height=7)
+```
+

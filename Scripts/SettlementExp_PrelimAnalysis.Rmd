@@ -13,59 +13,34 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ## Load libraries 
 ```{r}
-library(segmented)
-library(plotrix)
-library(gridExtra)
-library(LoLinR)
-library(lubridate)
-library(chron)
 library(patchwork)
 library(tidyverse)
 library(here)
 library(PNWColors)
-library(ggrepel)
-library(reshape2)
 library(viridis)
 library(car)
-library(GGally)
-library(corrplot)
-library(seacarb)
-library(broom)
-library(calecopal)
-library(ggridges)
-library(agricolae)
+library(lubridate)
 library(lme4)
 library(lmerTest)
 library(modelsummary)
 library(tidymodels)
 library(flextable)
 library(performance)
-library(ggeffects)
-library(sjPlot)
-library(patchwork)
-library(purrr)
-library(nlstools)
+library(agricolae)
+library(broom)
 library(stringr)
 library(emmeans)
-library(MuMIn)
-library(forcats)
-library(ggmap)
-library(maptools)
-library(kriging)
-library(ggnewscale)
-library(wql)
-library(pscl)
+
 ```
 
 ## Bring in datasets
 ```{r}
-SettlementCounts <- read_csv(here("Data","2024_SettlementCounts.csv"))
-pH <- read_csv(here("Data", "pHSlope.csv"))
-WaterChem<-read_csv(here("Data", "2024_WaterChemMeasurements.csv"))
+SettlementCounts <- read_csv(here::here("Data","2024_SettlementCounts.csv"))
+pH <- read_csv(here::here("Data", "pHSlope.csv"))
+WaterChem<-read_csv(here::here("Data", "2024_WaterChemMeasurements.csv"))
 ```
 
 ## tidy the data and start visualizing 
-
 ```{r}
 pH <- pH %>% 
   mutate(TrisCalDate = ymd(TrisCalDate))
@@ -92,10 +67,11 @@ SettlementCounts <- SettlementCounts %>%
   mutate(settled=(plastic_glue+mesh+top+bottom+side)) %>% 
   mutate(treatment_level=as.factor(treatment_level), 
          spawning_day=as.factor(spawning_day)) %>% 
-  mutate(dead = ifelse(dead < 0, 0, dead))
+  mutate(dead = ifelse(dead < 0, 0, dead)) %>% 
+  mutate(settled = ifelse(settled > 20, 20, settled)) %>% 
+  mutate(countcheck = (dead+settled)) 
 
 ```
-
 
 #### quick visualizations - updated May 12th, 2024
 ```{r}
@@ -326,4 +302,218 @@ ggsave(here("Outputs", "SettlementExperiment", "boxplots3_byday.jpg"),
 
 
 ```
+
+### For time being, forget about blocks and days and combine all results together for setttlement experiment 
+- to test silicate on the x axis and expected proportions of settlers on the y 
+
+```{r}
+###################################
+### first separate out by sites to add in total possible settlers column 
+###################################
+
+SettlementCounts_editV <- SettlementCounts %>% 
+  filter(site=="Varari") %>% 
+  dplyr::select(-c("notes", "swimming":"spawning_day", "rep_number", "treatmentID_rep", "countcheck")) %>% 
+  group_by(treatment_level, site) %>% 
+  dplyr::summarize(settled2 = sum(settled)) %>% 
+  dplyr::mutate(totalpossible = if_else(treatment_level == "High", 20 * 12, 20 * 11)) %>% 
+  dplyr::mutate(proportionsettled = settled2 / totalpossible)
+
+SettlementCounts_editC <- SettlementCounts %>% 
+  filter(site=="Cabral") %>% 
+  dplyr::select(-c("notes", "swimming":"spawning_day", "rep_number", "treatmentID_rep", "countcheck")) %>% 
+  group_by(treatment_level, site) %>%
+  dplyr::summarize(settled2 = sum(settled),
+                   totalpossible=20*30,
+                   proportionsettled=settled2/totalpossible)
+
+###################################
+### rejoin new dfs 
+###################################
+
+SettlementCounts_joined <- SettlementCounts_editC %>% 
+  full_join(SettlementCounts_editV)
+  
+
+###################################
+### plot
+###################################
+
+SettlementCounts_plotted <- SettlementCounts_joined %>% 
+  ggplot(aes(x=treatment_level, 
+             y=proportionsettled, 
+             fill=site)) +
+  geom_col(position = position_dodge()) + ##how to get fill variable next to each other rather than stacked 
+  scale_x_discrete(limits = c("Ambient", "Low", "Medium", "High")) + 
+  scale_fill_manual(values=c("burlywood3", "coral4"), 
+                    limits=c("Cabral", "Varari")) + 
+  theme_classic() + 
+  theme(axis.text.x=element_text(size=25), 
+        axis.text.y=element_text(size=25), 
+        axis.title.x=element_text(size=25), 
+        axis.title.y=element_text(size=25))
+  
+SettlementCounts_plotted
+ggsave(here("Outputs", "SettlementExperiment", "Prelim", "SettlementCounts_proportion1.jpg"), 
+       width=10, height=8)
+
+SettlementCounts_plotted2 <- SettlementCounts_joined %>% 
+  ggplot(aes(x=treatment_level, 
+             y=proportionsettled, 
+             fill=site)) +
+  geom_col() + 
+  scale_x_discrete(limits = c("Ambient", "Low", "Medium", "High")) + 
+  scale_fill_manual(values=c("burlywood3", "coral4"), 
+                    limits=c("Cabral", "Varari")) + 
+  facet_wrap(~site) +
+  theme_classic() + 
+  theme(axis.text.x=element_text(size=25), 
+        axis.text.y=element_text(size=25), 
+        axis.title.x=element_text(size=25), 
+        axis.title.y=element_text(size=25))
+  
+SettlementCounts_plotted2
+ggsave(here("Outputs", "SettlementExperiment", "Prelim", "SettlementCounts_proportion2.jpg"), 
+       width=10, height=8)
+
+
+###################################
+### Run a chi-squared test to see if those are real differences
+###################################
+
+# Create a contingency table of counts for each combination of treatment_level and site
+SettlementCounts_joined_V <- SettlementCounts_joined %>% 
+  filter(site=="Varari")
+
+contingency_table_V <- table(SettlementCounts_joined_V$treatment_level, SettlementCounts_joined_V$proportionsettled)
+
+# Perform the Chi-Square test
+chi_sq_test <- chisq.test(contingency_table_V)
+
+chi_sq_test
+
+
+#####################################
+## above plot look like as the average proportion with error bars instead of the total proportion across everything?
+#####################################
+
+### edit dfs 
+
+SettlementCounts_editV2 <- SettlementCounts %>% 
+  filter(site=="Varari") %>% 
+  dplyr::select(-c("notes", "swimming":"side", "countcheck")) %>% 
+  group_by(treatment_level, site, spawning_day) %>% 
+  dplyr::summarize(mean_settled = mean(settled)) %>% 
+  dplyr::mutate(total_possible = if_else(spawning_day == 2 & treatment_level == "High", 20 * 6, 
+                                         if_else(spawning_day == 1, 20 * 6, 20 * 5))) %>% 
+  dplyr::mutate(mean_proportionsettled = mean_settled / total_possible) %>% 
+  ungroup() %>%
+  dplyr::mutate(se = sd(mean_proportionsettled) / sqrt(n()))
+
+
+SettlementCounts_editC2 <- SettlementCounts %>% 
+  filter(site=="Cabral") %>% 
+  dplyr::select(-c("notes", "swimming":"side", "countcheck")) %>% 
+  group_by(treatment_level, site, spawning_day) %>%
+  dplyr::summarize(mean_settled = mean(settled),
+                   total_possible=20*5,
+                   mean_proportionsettled=mean_settled/total_possible) %>% 
+  ungroup() %>%
+  group_by(treatment_level, site) %>% 
+  dplyr::mutate(se = sd(mean_proportionsettled) / sqrt(n()))
+
+###################################
+### rejoin new dfs 
+###################################
+
+SettlementCounts_joined2 <- SettlementCounts_editC2 %>% 
+  full_join(SettlementCounts_editV2)
+
+###################################
+### now plot with SE bars 
+###################################
+SettlementCounts_plotted3 <- SettlementCounts_joined2 %>% 
+  ggplot(aes(x=treatment_level, 
+             y=mean_proportionsettled, 
+             fill=site)) +
+  geom_col(position = position_dodge(), width = 0.7) + 
+  geom_errorbar(aes(ymin = mean_proportionsettled - se, 
+                    ymax = mean_proportionsettled + se), 
+                 width = 0.2, 
+                position = position_dodge(0.7)) + 
+  scale_x_discrete(limits = c("Ambient", "Low", "Medium", "High")) + 
+  scale_fill_manual(values=c("burlywood3", "coral4"), 
+                    limits=c("Cabral", "Varari")) + 
+  facet_wrap(~site) +
+  theme_classic() + 
+  theme(axis.text.x=element_text(size=25), 
+        axis.text.y=element_text(size=25), 
+        axis.title.x=element_text(size=25), 
+        axis.title.y=element_text(size=25))
+
+SettlementCounts_plotted3
+
+```
+
+### rework with silicate data - August 7th, 2024 
+```{r}
+WaterChem <- WaterChem %>% 
+  mutate(TrisCalDate = ymd(TrisCalDate), 
+         date=mdy(date)) 
+
+waterchemdata <- pH %>% 
+  full_join(WaterChem, join_by(treatmentID_rep, experiment_number, sampling_period, TrisCalDate, time, date, orion_pH, mV, temp, salinity, light, note, TA, NN, phosphate, ammonia, silicate)) 
+
+SettlementCounts <- SettlementCounts %>% 
+  mutate(date = mdy(date))
+
+fulldata <- waterchemdata %>% 
+  full_join(SettlementCounts, join_by(treatmentID_rep, treatment_level, date)) #### not working perfecetly as of May 12th 2024 ---- not all water chem data is showing up 
+
+
+WaterChem_edit <- WaterChem %>% 
+  
+  
+
+```
+
+
+
+
+#### Craig meeting - focus on Cabral days first 
+
+```{r}
+SettlementCounts_Cabral <- SettlementCounts %>% 
+  filter(site=="Cabral") %>% 
+  dplyr::select(-c("notes", "swimming":"side", "rep_number", "treatmentID_rep", "countcheck")) %>% 
+  group_by(treatment_level, site, spawning_day) %>%
+  dplyr::summarize(settled2 = sum(settled),
+                   totalpossible=20*5,
+                   proportionsettled=settled2/totalpossible)
+
+
+
+## model = 
+Cabralsettlement_model <- lmer(proportionsettled~treatment_level + (1|spawning_day), data =SettlementCounts_Cabral)
+
+summary(Cabralsettlement_model)
+
+
+## significant difference from ambient ?? 
+
+
+
+Cabralsettlementplot <- SettlementCounts_Cabral %>% 
+  ggplot(aes(x=treatment_level, 
+             y=proportionsettled, 
+             fill=spawning_day)) + 
+  geom_col(position = position_dodge()) + 
+  scale_x_discrete(limits = c("Ambient", "Low", "Medium", "High")) + 
+  scale_fill_manual(values=pnw_palette("Bay", n=6)) 
+
+
+Cabralsettlementplot
+```
+
+
 

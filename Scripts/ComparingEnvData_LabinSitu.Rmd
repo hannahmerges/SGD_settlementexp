@@ -14,41 +14,22 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ## Load libraries 
 ```{r}
-library(segmented)
-library(plotrix)
-library(gridExtra)
-library(LoLinR)
-library(lubridate)
-library(chron)
 library(patchwork)
 library(tidyverse)
 library(here)
-library(PNWColors)
-library(ggrepel)
-library(reshape2)
-library(viridis)
 library(car)
 library(GGally)
-library(corrplot)
 library(PNWColors)
 library(seacarb)
 library(broom)
-library(calecopal)
-library(ggridges)
 library(agricolae)
 library(lme4)
 library(lmerTest)
 library(modelsummary)
-library(tidymodels)
-library(flextable)
 library(performance)
-library(agricolae)
-library(ggeffects)
 library(sjPlot)
-library(patchwork)
 library(broom)
 library(purrr)
-library(nlstools)
 library(stringr)
 library(emmeans)
 library(MuMIn)
@@ -56,9 +37,7 @@ library(forcats)
 library(ggmap)
 library(maptools)
 library(kriging)
-library(ggnewscale)
-library(wql)
-library(pscl)
+
 ```
 
 ## Bring in datasets
@@ -112,12 +91,6 @@ Measurements_to_Compare <- WaterChem_edit %>%
 
 
 ```
-
-
-
-
-
-
 
 ## try some plots 
 ```{r}

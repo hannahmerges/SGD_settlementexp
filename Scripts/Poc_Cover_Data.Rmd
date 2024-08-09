@@ -47,19 +47,36 @@ a) filter out the sand and hard substrate categories and b) sum the totals by co
 Poc_cover_data2 <- Poc_cover_data %>% 
   select(!c("Date", "PhotoNum", "Notes")) %>% 
   filter(Taxa!="Bare Rock",Taxa!="Sand",Taxa!="Rubble", Location!="Varari_Maya") %>% 
-  group_by(CowTagID) %>% 
-  summarise(total_count_biotics = sum(SpeciesCounts, na.rm = TRUE)) 
+  group_by(CowTagID) 
 
-##### ^^ THIS IS NOT WORKING RIGHT NOW _ MAY 29th -- with GROUP BY FEATURE 
- 
 Poc_cover_data3 <- Poc_cover_data2 %>% 
-  filter(Taxa=="Pocillopora acuta") %>% 
-  summarise(percent_cover = total_count_biotics/100)
+  dplyr::summarise(total_count_biotics = sum(SpeciesCounts)) %>% 
+  filter(CowTagID!="VSEEP")
 
+Poc_cover_data4 <- Poc_cover_data2 %>% 
+   filter(Taxa=="Pocillopora acuta")
+ 
+Poc_cover_data5 <- Poc_cover_data4 %>% 
+  left_join(Poc_cover_data3) %>% 
+  group_by(CowTagID, Location, SpeciesCounts,total_count_biotics ) %>% 
+  dplyr::summarise(percent_cover = (SpeciesCounts/total_count_biotics)*(100))
 
+##########################################
+### THIS REMOVES SOME OF THE TILES BC NOT ALL TILES HAD P. ACUTA COUNTS 
+##########################################
 EnvData_wPocCover <- EnvData_wrecruitcounts %>% 
-  full_join(Poc_cover_data3) %>% 
-  filter(CowTagID!= "CSEEP", CowTagID!= "VSEEP")
+  full_join(Poc_cover_data5) %>% 
+  write_csv(here::here("Data", "EnvData_wPocCover.csv"))
+
+##########################################
+## using Poc data WITH hard substrate and sand etc 
+###########################################
+Poc_cover_data_withhardsub <- Poc_cover_data %>% 
+  select(!c("Date", "PhotoNum", "Notes")) %>% 
+  filter(Location!="Varari_Maya") %>% 
+  group_by(CowTagID) 
+  
+  
 
 ```
 
@@ -68,7 +85,7 @@ EnvData_wPocCover <- EnvData_wrecruitcounts %>%
 ```{r}
 
 recruits_by_PocCover <- EnvData_wPocCover %>% 
-  ggplot(aes(x=SpeciesCounts, 
+  ggplot(aes(x=percent_cover, 
              y=log(sum_total+1), 
              color=Location)) + 
   geom_point(size=3) + 
@@ -77,14 +94,14 @@ recruits_by_PocCover <- EnvData_wPocCover %>%
   geom_smooth(method=lm, 
               fill="cornsilk3", 
               alpha=0.2) + ## alpha adjusts the transparency 
-  labs(x="Number of P. acuta Species found near tile location", 
+  labs(x="% Cover of P. acuta Species found near tile location", 
        y="Logged Total of Recruits")
 
 recruits_by_PocCover
-ggsave(here("Outputs", "RecruitmentTiles", "recruits_by_PocCover.jpg"))
+ggsave(here::here("Outputs", "RecruitmentTiles", "recruits_by_PocCover.jpg"))
 
 recruits_by_PocCover_facet <- EnvData_wPocCover %>% 
-  ggplot(aes(x=SpeciesCounts, 
+  ggplot(aes(x=percent_cover, 
              y=log(sum_total+1), 
              color=Location)) + 
   geom_point(size=3) + 
@@ -94,18 +111,17 @@ recruits_by_PocCover_facet <- EnvData_wPocCover %>%
               fill="cornsilk3", 
               alpha=0.2) + ## alpha adjusts the transparency 
   facet_wrap(~Location, scales="free") + 
-  labs(x="Number of P. acuta Species found near tile location", 
+  labs(x="% Cover of P. acuta Species found near tile location", 
        y="Logged Total of Recruits")
 
 recruits_by_PocCover_facet
-ggsave(here("Outputs", "RecruitmentTiles", "recruits_by_PocCover_facet.jpg"))
-
-
+ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "recruits_by_PocCover_facet.jpg"))
 
 ```
 
 ### create a similiar plot for recruits by just hard substrate 
-
+Currently getting an error (June 1st, 2024) because don't have substrate type in the EnvData_wPocCover df anymore 
+Should probably use PercentCover df and group into substrate -- might have code somehwere, currently tired 
 ```{r}
 EnvData_wPocCover_long <- EnvData_wPocCover %>% 
   pivot_longer(cols=Sand:HardSubstrate, names_to = "SubstrateType", values_to = "SubstrateValues")
@@ -135,14 +151,14 @@ ggsave(here("Outputs", "RecruitmentTiles", "recruits_by_SubstrateType.jpg"))
 CommComp_recruit_coralcover <- PercentCover3 %>% 
   left_join(RecruitmentCounts2.1, join_by(CowTagID, Location))
 
-CommComp_recruit_seasonavg_envdata_wLiveCover <- CommComp_recruit_coralcover %>% 
-  left_join(AllChemDataSeasonAvg_calculatedvalues, join_by(CowTagID)) 
-
 CommComp_recruit_coralcover_liveonly <- CommComp_recruit_coralcover %>% 
   filter(comm_type=="LiveCoral", 
          CowTagID!="CSEEP", CowTagID!="VSEEP")
 
-recruits_by_AllLiveCoral <- CommComp_recruit_coralcover_liveonly %>% 
+CommComp_recruit_seasonavg_envdata_wLiveCover <- CommComp_recruit_coralcover_liveonly %>% 
+  left_join(AllChemDataSeasonAvg_calculatedvalues, join_by(CowTagID)) 
+
+recruits_by_AllLiveCoral <- CommComp_recruit_seasonavg_envdata_wLiveCover %>% 
   ggplot(aes(x=percent_cover, 
              y=log(sum_total+1), 
              color=Location)) + 
@@ -170,14 +186,14 @@ ggsave(here::here("Outputs", "RecruitmentTiles", "recruits_by_AllLiveCoral.jpg")
 ######################
 ## all live coral including both sites 
 ######################
-model_livecoral <- lm(log(sum_total+1) ~ percent_cover + Location, data= CommComp_recruit_coralcover_liveonly) 
+model_livecoral <- lm(log(sum_total+1) ~ percent_cover + Location, data= CommComp_recruit_seasonavg_envdata_wLiveCover) 
 summary(model_livecoral)
 
 ######################
 ## just Varari 
 ######################
 
-CommComp_recruit_coralcover_liveonly_V <- CommComp_recruit_coralcover_liveonly %>% 
+CommComp_recruit_coralcover_liveonly_V <- CommComp_recruit_seasonavg_envdata_wLiveCover %>% 
   filter(Location=="Varari")
 
 model_Vlivecoral <- lm(log(sum_total+1) ~ percent_cover, data= CommComp_recruit_coralcover_liveonly_V) 
@@ -202,8 +218,6 @@ EnvData_wPocCover_V <- EnvData_wPocCover %>%
 
 model_VPocCover <- lm(log(sum_total+1) ~ SpeciesCounts, data= EnvData_wPocCover_V) 
 summary(model_VPocCover)
-
-
 
 
 EnvData_wPocCover_C <- EnvData_wPocCover %>% 

@@ -13,81 +13,51 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ## Load libraries 
 ```{r}
-library(segmented)
-library(plotrix)
-library(gridExtra)
-library(LoLinR)
-library(lubridate)
-library(chron)
 library(patchwork)
 library(tidyverse)
 library(here)
 library(PNWColors)
-library(ggrepel)
-library(reshape2)
-library(viridis)
-library(car)
-library(GGally)
-library(corrplot)
-library(PNWColors)
-library(seacarb)
-library(broom)
-library(calecopal)
-library(ggridges)
 library(agricolae)
 library(lme4)
 library(lmerTest)
 library(modelsummary)
-library(tidymodels)
-library(flextable)
 library(performance)
-library(agricolae)
-library(ggeffects)
-library(sjPlot)
-library(patchwork)
-library(broom)
 library(purrr)
 library(nlstools)
 library(stringr)
 library(emmeans)
-library(MuMIn)
-library(forcats)
-library(ggmap)
-library(maptools)
-library(kriging)
-library(ggnewscale)
-library(wql)
-library(pscl)
 library(modelr)
 ```
 
 ## Bring in datasets
 ```{r}
-RecruitmentCounts <- read_csv(here("Data","Recruitment_Tiles_Counts.csv"))
+RecruitmentCounts <- read_csv(here::here("Data","Recruitment_Tiles_Counts.csv"))
 AllChemData_August <- read_csv("https://raw.githubusercontent.com/njsilbiger/MooreaSGD_site-selection/main/Data/August2021/Allbiogeochemdata_QC.csv")
 AllChemData_March <- read_csv("https://raw.githubusercontent.com/njsilbiger/MooreaSGD_site-selection/main/Data/March2022/Allbiogeochemdata_QC_march_fdom2.csv")
 PercentCover <- read_csv("https://raw.githubusercontent.com/dbarnas/Community_Functional_Diversity/main/Data/Full_Metadata.csv")
-pH <- read_csv(here("Data", "pHSlope.csv"))
+pH <- read_csv(here::here("Data", "pHSlope.csv"))
 ```
 
 ### delete extra low tide from Varari on 08/06 in AUGUST dataframe and AVERAGE with March 
 ## DONT FORGET TO REMOVE SEEP DATA !!! 
 ```{r}
 
-AllChemData_August <- AllChemData_August %>% 
+AllChemData_August2 <- AllChemData_August %>% 
+  select(!c("Top_Plate_ID":"Plate_Seep", "Time", "DateTime", "M_C":"Lignin_Like")) %>% 
   filter(CowTagID!="CSEEP", CowTagID!="VSEEP", CowTagID!="CSPRING", CowTagID!="Varari_Well") %>% 
   group_by(Location, Tide, Date) %>% 
   filter(Date!="2021-08-06") 
 
 AllChemData_March$Date <- mdy(AllChemData_March$Date)
 
-AllChemData_March <- AllChemData_March %>% 
+AllChemData_March2 <- AllChemData_March %>% 
+  select(!c("Top_Plate_ID":"Plate_Seep", "Time", "DateTime", "TimeBlock", "M_C":"Lignin_Like")) %>% 
   filter(CowTagID!="CSEEP", CowTagID!="VSEEP", CowTagID!="VRC", CowTagID!="CRC", CowTagID!="CPIT", CowTagID!="CPIT_Bottom", CowTagID!="CSPRING_ROAD", CowTagID!="CSPRING_BEACH", CowTagID!="CSPRING_BEACH2", CowTagID!="VSPRING") %>% 
   filter(TA > 2096)
   
 
-AllChemData_seasonaverage <- AllChemData_August %>% 
-  full_join(AllChemData_March)
+AllChemData_seasonaverage <- AllChemData_August2 %>% 
+  full_join(AllChemData_March2)
 
   
 ```
@@ -99,8 +69,7 @@ full_CommunityRecruit <- PercentCover %>%
   left_join(RecruitmentCounts, join_by(CowTagID, Location))
 
 full_envdataRecruits_avgseason <- full_CommunityRecruit %>% 
-  left_join(AllChemData_seasonaverage, join_by(Location, CowTagID, lat, lon)) %>% 
-  select(!c("Top_Plate_ID", "Bottom_Plate_ID", "Jamie_Plate_ID", "Time", "DateTime", "M_C":"Lignin_Like"))
+  left_join(AllChemData_seasonaverage, join_by(Location, CowTagID, lat, lon)) 
 
 #full_envdataRecruits_August <- full_CommunityRecruit %>% 
  # left_join(AllChemData_August, join_by(Location, CowTagID, lat, lon))
@@ -124,16 +93,17 @@ full_envdataRecruits_avgseason <- full_CommunityRecruit %>%
 ```{r}
 ## calculating MEAN only  
 full_envdataRecruits_avgseason2 <- full_envdataRecruits_avgseason %>% 
-  select(!c("Date", "Tide", "Day_Night", "Plate_Seep")) %>% 
+  dplyr::select(!c("Date", "Tide", "Day_Night")) %>% 
   group_by(CowTagID) %>% 
-  summarise(avgSal=mean(Salinity, na.rm=TRUE), 
+  dplyr::summarise(avgSal=mean(Salinity, na.rm=TRUE), 
          avgTemp=mean(Temperature, na.rm=TRUE), 
          avgTA=mean(TA, na.rm=TRUE), 
          avgpH=mean(pH, na.rm=TRUE), 
          avgPhosphate=mean(Phosphate_umolL, na.rm=TRUE), 
          avgSilicate=mean(Silicate_umolL, na.rm=TRUE),
          avgNN=mean(NN_umolL, na.rm=TRUE), 
-         avgAmmonia=mean(Ammonia_umolL, na.rm=TRUE))
+         avgAmmonia=mean(Ammonia_umolL, na.rm=TRUE)) %>% 
+  filter(CowTagID!="CSEEP", CowTagID!="VSEEP", CowTagID!="Reef_Ambient_1", CowTagID!="Reef_Ambient_2", CowTagID!="Reef_Ambient_3", CowTagID!="Reef_SGD_1", CowTagID!="Reef_SGD_2", CowTagID!="Reef_SGD_3", CowTagID!="Sand_Ambient_1", CowTagID!="Sand_Ambient_2", CowTagID!="Sand_Ambient_3", CowTagID!="Sand_SGD_1", CowTagID!="Sand_SGD_2", CowTagID!="Rockwall_SGD_1", CowTagID!="Rockwall_SGD_2", CowTagID!="Rockwall_SGD_3")
 
 #full_envdataRecruits_August3 <- full_envdataRecruits_August2 %>% 
   #full_join(full_CommunityRecruit, join_by(CowTagID)) 
@@ -158,13 +128,13 @@ full_envdataRecruits_avgseason2 <- full_envdataRecruits_avgseason %>%
 
 ## group percent cover data and tidy into useful format 
 ```{r}
-PercentCover <- PercentCover %>% 
-  select(!c("del15N":"N_percent", "adj_CT_depth_cm", "meanRugosity"))
+PercentCover1 <- PercentCover %>% 
+  dplyr::select(!c("del15N":"N_percent", "adj_CT_depth_cm", "meanRugosity"))
 
-PercentCover2 <- PercentCover %>% 
+PercentCover2 <- PercentCover1 %>% 
   pivot_longer(cols = LiveCoral:Sand, names_to = "comm_type", values_to = "percent_cover") %>% 
   group_by(comm_type, CowTagID, Location) %>% 
-  summarize(percent_total=sum(percent_cover)) 
+  dplyr::summarize(percent_total=sum(percent_cover, na.rm=TRUE)) 
 
 PercentCover3 <- PercentCover2 %>% 
   group_by(comm_type) %>% 
@@ -175,7 +145,7 @@ PercentCover3 <- PercentCover3 %>%
   select(!starts_with(c("Reef","RockWall","Sand"))) %>% ## gets rid of the extra data that I don't need - columns that start with Reef, Rockwall, or Sand 
   pivot_longer(cols = C1:VSEEP, names_to = "CowTagID", values_to = "percent_cover") %>% 
   drop_na(percent_cover) %>% 
-  write_csv(here("Data", "Percentcover3.csv"))
+  write_csv(here::here("Data", "Percentcover3.csv"))
 
 ################
 ## goal: convert all hard substrate into one category compared to sand 
@@ -197,9 +167,9 @@ PercentCover_BinomialSubstrate <- PercentCover3 %>%
 #full_envdataRecruits_avgseason2 <- full_envdataRecruits_avgseason2 %>% 
 #  select(!c("Top_Plate_ID":"Plate_Seep", "M_C":"Lignin_Like")) 
   
-AllChemDataSeasonAvg_calculatedvalues <- AllChemData_seasonaverage %>% 
+AllChemDataSeasonAvg_calculatedvalues <- full_envdataRecruits_avgseason %>% 
   group_by(CowTagID) %>% 
-  summarize(sal_avg = mean(Salinity), 
+  dplyr::summarize(sal_avg = mean(Salinity), 
             temp_avg = mean(Temperature), 
             TA_avg = mean(TA), 
             pH_avg = mean(pH), 
@@ -241,9 +211,9 @@ AllChemDataSeasonAvg_calculatedvalues <- AllChemData_seasonaverage %>%
             ammonia_sd = sd(Ammonia_umolL))
 
 ##### FIGURE OUT HOW TO PROPERLY USE na.rm = TRUE 
-AllChemDataSeasonAvg_calculatedvalues2 <- AllChemData_seasonaverage %>% 
+AllChemDataSeasonAvg_calculatedvalues2 <- full_envdataRecruits_avgseason %>% 
   group_by(CowTagID) %>% 
-  summarize(sal_avg = mean(Salinity, na.rm=TRUE), 
+  dplyr::summarize(sal_avg = mean(Salinity, na.rm=TRUE), 
             temp_avg = mean(Temperature, na.rm=TRUE), 
             TA_avg = mean(TA, na.rm=TRUE), 
             pH_avg = mean(pH, na.rm=TRUE), 
@@ -282,7 +252,9 @@ AllChemDataSeasonAvg_calculatedvalues2 <- AllChemData_seasonaverage %>%
             phos_sd = sd(Phosphate_umolL, na.rm=TRUE), 
             NN_sd = sd(NN_umolL, na.rm=TRUE), 
             silicate_sd= sd(Silicate_umolL, na.rm=TRUE),
-            ammonia_sd = sd(Ammonia_umolL, na.rm=TRUE))
+            ammonia_sd = sd(Ammonia_umolL, na.rm=TRUE)) %>% 
+  filter(CowTagID!="CSEEP", CowTagID!="VSEEP", CowTagID!="Reef_Ambient_1", CowTagID!="Reef_Ambient_2", CowTagID!="Reef_Ambient_3", CowTagID!="Reef_SGD_1", CowTagID!="Reef_SGD_2", CowTagID!="Reef_SGD_3", CowTagID!="Sand_Ambient_1", CowTagID!="Sand_Ambient_2", CowTagID!="Sand_Ambient_3", CowTagID!="Sand_SGD_1", CowTagID!="Sand_SGD_2", CowTagID!="RockWall_SGD_1", CowTagID!="RockWall_SGD_2", CowTagID!="RockWall_SGD_3")
+
 #### for March 
 #AllChemData_Marchedit <- AllChemData_March %>% 
  # select(!c("Top_Plate_ID":"Plate_Seep", "M_C":"Lignin_Like")) 
@@ -326,7 +298,7 @@ AllChemDataSeasonAvg_calculatedvalues2 <- AllChemData_seasonaverage %>%
 
 RecruitmentCounts2.1 <- RecruitmentCounts %>% 
   group_by(CowTagID, Location) %>% 
-  summarise(sum_total = sum(Pocilloporidae+Poritidae+Acroporidae+Other), 
+  dplyr::summarise(sum_total = sum(Pocilloporidae+Poritidae+Acroporidae+Other), 
             sum_total_dead = sum(Dead), 
             sum_total_alive=sum(sum_total-sum_total_dead)) %>% 
   write_csv(here::here("Data", "RecruitmentCounts2.1.csv"))
@@ -360,12 +332,21 @@ RecruitmentCounts2.1 <- RecruitmentCounts %>%
 
 
 ##############
-CommComp_recruit <- PercentCover_BinomialSubstrate %>% 
-  left_join(RecruitmentCounts2.1, join_by(CowTagID, Location))
 
-CommComp_recruit_seasonavg_envdata <- CommComp_recruit %>% 
-  left_join(AllChemDataSeasonAvg_calculatedvalues, join_by(CowTagID)) %>% 
-  write_csv(here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+## does not include substrate type and THEREFORE includes C14 
+CommComp_recruit_seasonavg_envdata <- RecruitmentCounts2.1 %>% 
+  left_join(AllChemDataSeasonAvg_calculatedvalues2) %>% 
+  write_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+
+  
+
+## DOES INCLUDE substrate type/cover
+CommComp_recruit2 <- PercentCover_BinomialSubstrate %>% 
+  left_join(RecruitmentCounts2.1, join_by(CowTagID, Location)) ### THIS DOES NOT HAVE C14!!! 
+
+CommComp_recruit_seasonavg_envdata2 <- CommComp_recruit2 %>% 
+  left_join(AllChemDataSeasonAvg_calculatedvalues2, join_by(CowTagID)) %>% 
+  write_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata2.csv"))
 
 
 #CommComp_recruit_Augustenvdata <- CommComp_recruit %>% 
@@ -381,8 +362,8 @@ CommComp_recruit_seasonavg_envdata <- CommComp_recruit %>%
 CommComp_recruit_seasonAvg_envdata_longMAX <- CommComp_recruit_seasonavg_envdata %>% 
   pivot_longer(cols="sal_max":"ammonia_max", names_to = "MAXenv_params") %>% 
   mutate(max_value = value) %>% 
-  select(!c("sal_avg":"ammonia_CV", "value")) %>% 
-  write_csv(here("Data", "longMAX.csv"))
+  dplyr::select(!c("sal_avg":"ammonia_CV", "value")) %>% 
+  write_csv(here::here("Data", "longMAX.csv"))
 
 #CommComp_recruit_Marchenvdata_longMAX <- CommComp_recruit_Marchenvdata %>% 
 #  pivot_longer(cols="sal_max":"ammonia_max", names_to = "MAXenv_params") %>% 
@@ -394,8 +375,8 @@ CommComp_recruit_seasonAvg_envdata_longMAX <- CommComp_recruit_seasonavg_envdata
 CommComp_recruit_seasonAvg_envdata_longMIN <- CommComp_recruit_seasonavg_envdata %>%
   pivot_longer(cols="sal_min":"ammonia_min", names_to = "MINenv_params") %>% 
   mutate(min_value = value) %>% 
-  select(!c("sal_avg":"ammonia_CV", "value")) %>% 
-  write_csv(here("Data", "longMIN.csv"))
+  dplyr::select(!c("sal_avg":"ammonia_CV", "value")) %>% 
+  write_csv(here::here("Data", "longMIN.csv"))
 
 #CommComp_recruit_Marchenvdata_longMIN <- CommComp_recruit_Marchenvdata %>%
 #  pivot_longer(cols="sal_min":"ammonia_min", names_to = "MINenv_params") %>% 
@@ -406,8 +387,8 @@ CommComp_recruit_seasonAvg_envdata_longMIN <- CommComp_recruit_seasonavg_envdata
 CommComp_recruit_seasonAvg_envdata_longMEAN <- CommComp_recruit_seasonavg_envdata %>% 
   pivot_longer(cols="sal_avg":"ammonia_avg", names_to = "AVGenv_params") %>% 
   mutate(avg_value = value) %>% 
-  select(!c("sal_max":"ammonia_CV", "value")) %>% 
-  write_csv(here("Data", "longMEAN.csv"))
+  dplyr::select(!c("sal_max":"ammonia_CV", "value")) %>% 
+  write_csv(here::here("Data", "longMEAN.csv"))
 
 #CommComp_recruit_Marchenvdata_longMEAN <- CommComp_recruit_Marchenvdata %>% 
 #  pivot_longer(cols="sal_avg":"ammonia_avg", names_to = "AVGenv_params") %>% 
@@ -418,8 +399,8 @@ CommComp_recruit_seasonAvg_envdata_longMEAN <- CommComp_recruit_seasonavg_envdat
 CommComp_recruit_seasonAvg_envdata_longCV <- CommComp_recruit_seasonavg_envdata %>% 
   pivot_longer(cols="sal_CV":"ammonia_CV", names_to = "CVenv_params") %>% 
   mutate(CV_value = value) %>% 
-  select(!c("sal_avg":"ammonia_min", "value")) %>% 
-  write_csv(here("Data", "longCV.csv"))
+  dplyr::select(!c("sal_avg":"ammonia_min", "value")) %>% 
+  write_csv(here::here("Data", "longCV.csv"))
 
 #CommComp_recruit_Marchenvdata_longCV <- CommComp_recruit_Marchenvdata %>% 
  # pivot_longer(cols="sal_CV":"ammonia_CV", names_to = "CVenv_params") %>% 
@@ -1260,7 +1241,7 @@ live_dead_plotC2 <- CommComp_recruit_envdata_pivot %>%
 live_dead_plotC2
 
 live_dead_plotC2 + live_dead_plotV2
-ggsave(here("Outputs","RecruitmentTiles", "Dead_vs_Alive_stacked.jpg"), 
+ggsave(here::here("Outputs","RecruitmentTiles", "Results", "Prelim", "Dead_vs_Alive_stacked.jpg"), 
        width=20, height=15)
 
 
@@ -1270,7 +1251,7 @@ ggsave(here("Outputs","RecruitmentTiles", "Dead_vs_Alive_stacked.jpg"),
 
 
 CommComp_recruit_envdata_pivot_edit <- CommComp_recruit_envdata_pivot %>% 
-  select(!c(sal_max:ammonia_CV))
+  dplyr::select(!c(sal_max:ammonia_CV))
 
 EnvData_DeadAliveC <- CommComp_recruit_envdata_pivot_edit %>% 
   filter(Location=="Cabral", 
@@ -1313,7 +1294,7 @@ ggsave(here("Outputs","RecruitmentTiles", "Dead_vs_Alive_EnvData.jpg"),
 ```{r}
 ### color by silicate 
 CommComp_recruit_envdata2 <- CommComp_recruit_envdata %>% 
-  select(!c("sal_max":"ammonia_CV"))
+  dplyr::select(!c("sal_max":"ammonia_CV"))
 
 Dead_Alive_Scatter_slope1 <- CommComp_recruit_envdata2 %>% 
   filter(silicate_avg < 40) %>% 

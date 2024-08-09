@@ -24,6 +24,7 @@ library(PNWColors)
 library(factoextra)
 library(devtools)
 library(ggbiplot)
+#library(fviz_eig)
 ```
 
 ### Load Data
@@ -35,11 +36,11 @@ EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonav
 ## tidy data for a PCA 
 ```{r}
 EnvData_wrecruitcounts2 <- EnvData_wrecruitcounts %>% 
-  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
-  drop_na() %>% 
-  mutate(sum_total=log(sum_total+1)) ## confirm if this should still be logged 
+  select(!c("CowTagID", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  #drop_na() %>% 
+  mutate(sum_total=log(sum_total+1)) 
 
-EnvData_wrecruitcounts2$sum_total <- as.character(EnvData_wrecruitcounts2$sum_total)
+#EnvData_wrecruitcounts2$log_sum_total <- as.character(EnvData_wrecruitcounts2$log_sum_total)
 ```
 
 ## start building PCA 
@@ -101,7 +102,7 @@ biogeochem_PCAplot <- biogeochem_PCAmodel %>%
         legend.text=element_text(size=8))
 
 biogeochem_PCAplot
-ggsave(here("Outputs", "RecruitmentTiles", "PCA_plot.jpg")) 
+ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot.jpg")) 
 
 
 ```
@@ -113,8 +114,7 @@ ggsave(here("Outputs", "RecruitmentTiles", "PCA_plot.jpg"))
 ```{r}
 
 EnvData_wrecruitcounts_V <- EnvData_wrecruitcounts %>% 
-  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
-  drop_na() %>% 
+  select(!c("CowTagID", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
   mutate(sum_total=log(sum_total+1)) %>% 
   filter(Location=="Varari") %>% 
   select(!"Location")
@@ -183,7 +183,7 @@ ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_V.jpg"))
 ```{r}
 
 EnvData_wrecruitcounts_C <- EnvData_wrecruitcounts %>% 
-  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  select(!c("CowTagID", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
   drop_na() %>% 
   mutate(sum_total=log(sum_total+1)) %>% 
   filter(Location=="Cabral") %>% 
@@ -261,7 +261,7 @@ EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonav
 
 ##### Varari 
 EnvData_wrecruitcounts3_V <- EnvData_wrecruitcounts %>% 
-  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  select(!c("CowTagID", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
   drop_na() %>% 
   mutate(sum_total=log(sum_total+1)) %>% ## confirm if this should still be logged 
   select(!c("temp_avg", "temp_sd")) %>% 
@@ -272,7 +272,7 @@ EnvData_wrecruitcounts3_V$sum_total <- as.character(EnvData_wrecruitcounts3_V$su
 
 ##### Cabral 
 EnvData_wrecruitcounts3_C <- EnvData_wrecruitcounts %>% 
-  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  select(!c("CowTagID", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
   drop_na() %>% 
   mutate(sum_total=log(sum_total+1)) %>% ## confirm if this should still be logged 
   select(!c("temp_avg", "temp_sd")) %>% 
@@ -299,7 +299,7 @@ summary(biogeochem_PCAmodel_V_notemp) ## look at the model
 plot(biogeochem_PCAmodel_V_notemp, type="lines")
 
 ## prettier version 
-fviz_eig(biogeochem_PCAmodel_V_notemp)
+#fviz_eig(biogeochem_PCAmodel_V_notemp)
 
 biogeochem_PCAmodel_V_notemp$loadings  # Shows the loadings of each trait on each PC 
 
@@ -402,16 +402,18 @@ biogeochem_PCAplot_C_notemp
 ##########################################
 ##########################################
 biogeochem_PCAplot_C_notemp + biogeochem_PCAplot_V_notemp
+ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "PCA_plot_bothsitenotemp.jpg")) 
+
 
 ```
 ### remove all the sd and just use averages 
 ```{r}
 
-EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+#EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
 
 ##### Varari 
 EnvData_wrecruitcounts3_V_avgonly <- EnvData_wrecruitcounts %>% 
-  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  select(!c("CowTagID", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
   drop_na() %>% 
   mutate(sum_total=log(sum_total+1)) %>% ## confirm if this should still be logged 
   select(!c("sal_sd":"ammonia_sd")) %>% 
@@ -422,7 +424,7 @@ EnvData_wrecruitcounts3_V_avgonly$sum_total <- as.character(EnvData_wrecruitcoun
 
 ##### Cabral 
 EnvData_wrecruitcounts3_C_avgonly <- EnvData_wrecruitcounts %>% 
-  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  select(!c("CowTagID", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
   drop_na() %>% 
   mutate(sum_total=log(sum_total+1)) %>% ## confirm if this should still be logged 
    select(!c("sal_sd":"ammonia_sd")) %>% 
@@ -477,9 +479,8 @@ biogeochem_PCAplot_V_avgonly <- biogeochem_PCAmodel_V_avgonly %>%
            varname.size=3, 
            varname.adjust=1.2, 
            circle=FALSE) +
-  scale_color_discrete(name='') +
-  geom_point(aes(colour=factor(EnvData_wrecruitcounts3_V_avgonly$sum_total)), 
-             size = 3) + 
+  #scale_color_discrete(name='') +
+ geom_point(aes(size = factor(EnvData_wrecruitcounts3_V_avgonly$sum_total))) + 
   theme_classic() +
   theme(legend.direction = 'horizontal', 
         legend.position='bottom', 
@@ -536,9 +537,8 @@ biogeochem_PCAplot_C_avgonly <- biogeochem_PCAmodel_C_avgonly %>%
            varname.size=3, 
            varname.adjust=1.2, 
            circle=FALSE) +
-  scale_color_discrete(name='') +
-  geom_point(aes(colour=factor(EnvData_wrecruitcounts3_C_avgonly$sum_total)), 
-             size = 3) + 
+  #scale_color_discrete(name='') +
+  geom_point(aes(size = factor(EnvData_wrecruitcounts3_C_avgonly$sum_total), guide="none")) + 
   theme_classic() +
   theme(legend.direction = 'horizontal', 
         legend.position='bottom', 
@@ -557,13 +557,14 @@ biogeochem_PCAplot_C_avgonly + biogeochem_PCAplot_V_avgonly
 
 
 #### remove all the sd and just use averages  MINUS temperature 
+As of May 28th: Cabral PCA is looking clean, Varari is still not so looking at just the parameters from the top best fit models and seeing if we can make the PCA cleaner, however, as of May 30th, added in extra 3 tiles for both V and C that were previously not included in the PCAs because of missing env data, but using na.rm=TRUE, have values for those now and are included in the model 
 ```{r}
 
-EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
+#EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonavg_envdata.csv"))
 
 ##### Varari 
 EnvData_wrecruitcounts3_V_avgonly_notemp <- EnvData_wrecruitcounts %>% 
-  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  select(!c("CowTagID", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
   drop_na() %>% 
   mutate(sum_total=log(sum_total+1)) %>% ## confirm if this should still be logged 
   select(!c("sal_sd":"ammonia_sd", "temp_avg")) %>% 
@@ -574,7 +575,7 @@ EnvData_wrecruitcounts3_V_avgonly_notemp$sum_total <- as.character(EnvData_wrecr
 
 ##### Cabral 
 EnvData_wrecruitcounts3_C_avgonly_notemp <- EnvData_wrecruitcounts %>% 
-  select(!c("CowTagID":"HardSubstrate", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
+  select(!c("CowTagID", "sum_total_dead", "sum_total_alive", "sal_max":"ammonia_CV")) %>% 
   drop_na() %>% 
   mutate(sum_total=log(sum_total+1)) %>% ## confirm if this should still be logged 
    select(!c("sal_sd":"ammonia_sd", "temp_avg")) %>% 
@@ -601,7 +602,7 @@ summary(biogeochem_PCAmodel_V_avgonly_notemp) ## look at the model
 plot(biogeochem_PCAmodel_V_avgonly_notemp, type="lines")
 
 ## prettier version 
-fviz_eig(biogeochem_PCAmodel_V_avgonly_notemp)
+#fviz_eig(biogeochem_PCAmodel_V_avgonly_notemp)
 
 biogeochem_PCAmodel_V_avgonly_notemp$loadings  # Shows the loadings of each trait on each PC 
 
@@ -625,13 +626,12 @@ biplot(biogeochem_PCAmodel_V_avgonly_notemp, xlab="PC1", ylab="PC2")
 biogeochem_PCAplot_V_avgonly_notemp <- biogeochem_PCAmodel_V_avgonly_notemp %>% 
   ggbiplot(obs.scale=1, 
            var.scale=1,
-           groups=EnvData_wrecruitcounts3_V_avgonly_notemp$sum_total, 
+          # groups=EnvData_wrecruitcounts3_V_avgonly_notemp$sum_total, 
            varname.size=3, 
            varname.adjust=1.2, 
            circle=FALSE) +
-  scale_color_discrete(name='') +
-  geom_point(aes(colour=factor(EnvData_wrecruitcounts3_V_avgonly_notemp$sum_total)), 
-             size = 3) + 
+  #scale_color_discrete(name='') +
+  geom_point(aes(size = factor(EnvData_wrecruitcounts3_C_avgonly$sum_total), guide="none")) + 
   theme_classic() +
   theme(legend.direction = 'horizontal', 
         legend.position='bottom', 
@@ -639,7 +639,7 @@ biogeochem_PCAplot_V_avgonly_notemp <- biogeochem_PCAmodel_V_avgonly_notemp %>%
   labs(title="Varari Average Only Without Temperature")
 
 biogeochem_PCAplot_V_avgonly_notemp
-#ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_V.jpg")) 
+ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_V_avgonly_notemp.jpg")) 
 
 
 #########################
@@ -658,7 +658,7 @@ summary(biogeochem_PCAmodel_C_avgonly_notemp) ## look at the model
 plot(biogeochem_PCAmodel_C_avgonly_notemp, type="lines")
 
 ## prettier version 
-fviz_eig(biogeochem_PCAmodel_C_avgonly_notemp)
+#fviz_eig(biogeochem_PCAmodel_C_avgonly_notemp)
 
 biogeochem_PCAmodel_C_avgonly_notemp$loadings  # Shows the loadings of each trait on each PC 
 
@@ -684,13 +684,12 @@ biplot(biogeochem_PCAmodel_C_avgonly_notemp, xlab="PC1", ylab="PC2")
 biogeochem_PCAplot_C_avgonly_notemp <- biogeochem_PCAmodel_C_avgonly_notemp %>% 
   ggbiplot(obs.scale=1, 
            var.scale=1,
-           groups=EnvData_wrecruitcounts3_C_avgonly_notemp$sum_total, 
+           #groups=EnvData_wrecruitcounts3_C_avgonly_notemp$sum_total, 
            varname.size=3, 
            varname.adjust=1.2, 
            circle=FALSE) +
-  scale_color_discrete(name='') +
-  geom_point(aes(colour=factor(EnvData_wrecruitcounts3_C_avgonly_notemp$sum_total)), 
-             size = 3) + 
+  #scale_color_discrete(name='') +
+ geom_point(aes(size = factor(EnvData_wrecruitcounts3_C_avgonly$sum_total))) + 
   theme_classic() +
   theme(legend.direction = 'horizontal', 
         legend.position='bottom', 
@@ -704,6 +703,7 @@ ggsave(here::here("Outputs", "RecruitmentTiles", "PCA_plot_C_notemp_avgs.jpg"))
 ##########################################
 ##########################################
 biogeochem_PCAplot_C_avgonly_notemp + biogeochem_PCAplot_V_avgonly_notemp
+ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "PCAs_VandC_avgnotemp.jpg"))
 
 
 ```
@@ -720,7 +720,7 @@ C_PC1_df <- data.frame(Cbiogeochem_PC1_avgonly_notemp)
 ### now need to include logged recruit counts 
 
 C_PC1_df2 <- C_PC1_df %>% 
-  mutate(sum_total=c(3.4011974, 2.4849066, 1.0986123,2.8332133,2.7080502, 2.3978953, 3.7612001, 1.0986123, 0.0000000, 4.9904326, 0.6931472, 1.0986123, 1.9459101, 2.9444390, 2.1972246, 2.3025851, 1.3862944))
+  mutate(sum_total=c(3.40119738166216, 2.484906649788, 1.09861228866811, 4.46590811865458, 2.83321334405622, 2.63905732961526, 2.70805020110221, 2.39789527279837, 3.76120011569356, 1.09861228866811, 0.0000000, 2.77258872223978, 4.99043258677874, 0.693147180559945, 1.09861228866811, 1.94591014905531, 2.94443897916644, 2.19722457733622, 2.30258509299405, 1.38629436111989))
 
 C_PC1_df2_long <- C_PC1_df2 %>% 
   pivot_longer(cols=Comp.1:Comp.2, names_to = "Comp1_2", values_to = "PCA_scores")
@@ -731,7 +731,7 @@ Vbiogeochem_PC1_avgonly_notemp <- biogeochem_PCAmodel_V_avgonly_notemp$scores[,c
 V_PC1_df <- data.frame(Vbiogeochem_PC1_avgonly_notemp)
 
 V_PC1_df2 <- V_PC1_df %>% 
-  mutate(sum_total=c(4.543295, 4.143135, 4.077537, 4.882802, 1.098612, 3.526361, 3.135494, 2.079442, 2.639057, 1.791759, 4.574711, 1.609438, 3.332205, 3.806662, 3.496508, 1.098612, 2.995732))
+  mutate(sum_total=c(4.54329478227, 4.14313472639153, 4.07753744390572, 4.88280192258637, 2.19722457733622, 1.09861228866811, 3.52636052461616, 3.13549421592915, 2.07944154167984, 2.63905732961526, 1.79175946922805, 4.57471097850338, 1.6094379124341,1.09861228866811, 3.3322045101752, 3.80666248977032, 3.49650756146648,2.83321334405622, 1.09861228866811, 2.99573227355399))
 
 V_PC1_df2_long <- V_PC1_df2 %>% 
   pivot_longer(cols=Comp.1:Comp.2, names_to = "Comp1_2", values_to = "PCA_scores")
@@ -767,7 +767,7 @@ C_PCscores_recruits <- C_PC1_df2_long %>%
   geom_smooth(method="lm")
   
 C_PCscores_recruits
-ggsave(here("Outputs", "RecruitmentTiles", "CabralPCscores.jpg"))
+ggsave(here::here("Outputs", "RecruitmentTiles", "CabralPCscores.jpg"))
 
 C_PCscores_recruits / V_PCscores_recruits
 
@@ -776,8 +776,8 @@ C_PCscores_recruits / V_PCscores_recruits
 ## are these models significant? 
 ```{r}
 ### Varari 
-V_PCAmodel <- lm(sum_total ~ PCA_scores * Comp1_2 ,data = V_PC1_df2_long)
-summary(V_PCAmodel)
+#V_PCAmodel <- lm(sum_total ~ PCA_scores * Comp1_2 ,data = V_PC1_df2_long)
+#summary(V_PCAmodel)
 
 V_PCAmodel2 <- lm(sum_total ~ poly(Comp.1, degree=2) ,data = V_PC1_df2)
 summary(V_PCAmodel2)
@@ -787,10 +787,3 @@ C_PCAmodel2 <- lm(sum_total ~ Comp.1 ,data = C_PC1_df2)
 summary(C_PCAmodel2)
 
 ```
-
-### BRING IN 3 tiles missing 
-
-
-
-
-
