@@ -373,7 +373,10 @@ PocCover_boxplot <- EnvData_wPocCover_ttest %>%
 PocCover_boxplot
 
 ##### patch together 
-PocCover_boxplot + Settlement_boxplot
+joined_pocandsilicate <- PocCover_boxplot + Settlement_boxplot
+
+joined_pocandsilicate
+
 ```
 
 

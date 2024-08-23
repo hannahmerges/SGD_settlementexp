@@ -42,7 +42,10 @@ RecruitmentCounts2.1 <- read_csv((here::here("Data", "RecruitmentCounts2.1.csv")
 ```
 
 ## Tidy data and join in Danielle's Poc cover data 
-a) filter out the sand and hard substrate categories and b) sum the totals by cowtagid to get percent cover of the biotics c) calcualte percent cover of P. acuta based on total amount of biotics in the area 
+-  a) filter out the sand and hard substrate categories and 
+-  b) sum the totals by cowtagid to get percent cover of the biotics 
+-  c) calcualte percent cover of P. acuta based on total amount of biotics in the area 
+-  Add in 0s for the cowtags that don't have P acuta counts (confirmed with Danielle, August 2024)
 ```{r}
 Poc_cover_data2 <- Poc_cover_data %>% 
   select(!c("Date", "PhotoNum", "Notes")) %>% 
@@ -51,7 +54,7 @@ Poc_cover_data2 <- Poc_cover_data %>%
 
 Poc_cover_data3 <- Poc_cover_data2 %>% 
   dplyr::summarise(total_count_biotics = sum(SpeciesCounts)) %>% 
-  filter(CowTagID!="VSEEP")
+  filter(CowTagID!="VSEEP") ## missing C14 
 
 Poc_cover_data4 <- Poc_cover_data2 %>% 
   filter(Taxa=="Pocillopora acuta") %>% 
@@ -59,14 +62,14 @@ Poc_cover_data4 <- Poc_cover_data2 %>%
   mutate(SpeciesCounts_Poc = SpeciesCounts) %>% 
   dplyr::select(!SpeciesCounts)
  
-### joins and drops CowTgs without P acuta data + correlated biotics counts for that CowTag 
+### joins correlated biotics counts for that CowTag -- still with missing cowtags without P acuta data 
 Poc_cover_data5 <- Poc_cover_data4 %>% 
   left_join(Poc_cover_data3) %>% 
   group_by(CowTagID, Location, SpeciesCounts_Poc,total_count_biotics ) %>% 
-  dplyr::summarise(percent_cover = (SpeciesCounts_Poc/total_count_biotics)*(100))
+  dplyr::summarise(percent_cover = (SpeciesCounts_Poc/total_count_biotics)*(100)) 
 
 ##########################################
-### THIS REMOVES SOME OF THE TILES BC NOT ALL TILES HAD P. ACUTA COUNTS 
+### join together with recruit count env data df and then make sure to add in the zeros for P acuta cowtags 
 ##########################################
 EnvData_wPocCover <- EnvData_wrecruitcounts %>% 
   full_join(Poc_cover_data5) %>% 
@@ -86,7 +89,8 @@ Poc_cover_data_withhardsub <- Poc_cover_data %>%
 ```
 
 ## Look at recruit totals by how many P acuta at the CowTagID
--  might need to square root the percent cover data bc of the variances 
+-  might need to square root the percent cover data bc of the variances (shown in recruits_by_PocCover)
+-  faceted plot = non-transformed percent cover
 
 ```{r}
 
@@ -157,13 +161,7 @@ AIC(linear_PacutaCover)
 
 
 
-
-
-
-
-
-
-
+ignore below this line 
 #######################################################################################
 #######################################################################################
 
@@ -204,26 +202,26 @@ CommComp_recruit_coralcover_liveonly <- CommComp_recruit_coralcover %>%
   filter(comm_type=="LiveCoral", 
          CowTagID!="CSEEP", CowTagID!="VSEEP")
 
-CommComp_recruit_seasonavg_envdata_wLiveCover <- CommComp_recruit_coralcover_liveonly %>% 
-  left_join(AllChemDataSeasonAvg_calculatedvalues, join_by(CowTagID)) 
+#CommComp_recruit_seasonavg_envdata_wLiveCover <- CommComp_recruit_coralcover_liveonly %>% 
+ # left_join(AllChemDataSeasonAvg_calculatedvalues, join_by(CowTagID)) 
 
-recruits_by_AllLiveCoral <- CommComp_recruit_seasonavg_envdata_wLiveCover %>% 
-  ggplot(aes(x=percent_cover, 
-             y=log(sum_total+1), 
-             color=Location)) + 
-  geom_point(size=3) + 
-  theme_classic() + 
-  scale_color_manual(values=c("cornflowerblue", "salmon")) +
-  geom_smooth(method=lm, 
-              fill="cornsilk3", 
-              alpha=0.2) + 
-  facet_wrap(~Location) + 
-  labs(x="Percent Live Coral", 
-       y= "Log of Total Recruits")
+#recruits_by_AllLiveCoral <- CommComp_recruit_seasonavg_envdata_wLiveCover %>% 
+ # ggplot(aes(x=percent_cover, 
+          #   y=log(sum_total+1), 
+           #  color=Location)) + 
+ # geom_point(size=3) + 
+  #theme_classic() + 
+#  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+#  geom_smooth(method=lm, 
+         #     fill="cornsilk3", 
+        #      alpha=0.2) + 
+ # facet_wrap(~Location) + 
+ # labs(x="Percent Live Coral", 
+     #  y= "Log of Total Recruits")
+#
+#recruits_by_AllLiveCoral
 
-recruits_by_AllLiveCoral
-
-ggsave(here::here("Outputs", "RecruitmentTiles", "recruits_by_AllLiveCoral.jpg"))
+#ggsave(here::here("Outputs", "RecruitmentTiles", "recruits_by_AllLiveCoral.jpg"))
 
 
 
@@ -242,45 +240,45 @@ Cabral:
 ######################
 ## all live coral including both sites 
 ######################
-model_livecoral <- lm(log(sum_total+1) ~ percent_cover + Location, data= CommComp_recruit_seasonavg_envdata_wLiveCover) 
-summary(model_livecoral)
+#model_livecoral <- lm(log(sum_total+1) ~ percent_cover + Location, data= CommComp_recruit_seasonavg_envdata_wLiveCover) 
+#summary(model_livecoral)
 
 ######################
 ## just Varari 
 ######################
 
-CommComp_recruit_coralcover_liveonly_V <- CommComp_recruit_seasonavg_envdata_wLiveCover %>% 
-  filter(Location=="Varari")
+#CommComp_recruit_coralcover_liveonly_V <- CommComp_recruit_seasonavg_envdata_wLiveCover %>% 
+ # filter(Location=="Varari")
 
-model_Vlivecoral <- lm(log(sum_total+1) ~ percent_cover, data= CommComp_recruit_coralcover_liveonly_V) 
-summary(model_Vlivecoral)
+#model_Vlivecoral <- lm(log(sum_total+1) ~ percent_cover, data= CommComp_recruit_coralcover_liveonly_V) 
+#summary(model_Vlivecoral)
 
 ######################
 ## just Cabral 
 ######################
 
-CommComp_recruit_coralcover_liveonly_C <- CommComp_recruit_coralcover_liveonly %>% 
-  filter(Location=="Cabral")
+#CommComp_recruit_coralcover_liveonly_C <- CommComp_recruit_coralcover_liveonly %>% 
+ # filter(Location=="Cabral")
 
-model_Clivecoral <- lm(log(sum_total+1) ~ percent_cover, data= CommComp_recruit_coralcover_liveonly_C) 
-summary(model_Clivecoral)
+#model_Clivecoral <- lm(log(sum_total+1) ~ percent_cover, data= CommComp_recruit_coralcover_liveonly_C) 
+#summary(model_Clivecoral)
 
 ###################################################################
 ######################
 ## just Poc cover 
 ######################
-EnvData_wPocCover_V <- EnvData_wPocCover %>% 
-  filter(Location=="Varari")
+#EnvData_wPocCover_V <- EnvData_wPocCover %>% 
+ # filter(Location=="Varari")
 
-model_VPocCover <- lm(log(sum_total+1) ~ SpeciesCounts, data= EnvData_wPocCover_V) 
-summary(model_VPocCover)
+#model_VPocCover <- lm(log(sum_total+1) ~ SpeciesCounts, data= EnvData_wPocCover_V) 
+#summary(model_VPocCover)
 
 
-EnvData_wPocCover_C <- EnvData_wPocCover %>% 
-  filter(Location=="Cabral")
+#EnvData_wPocCover_C <- EnvData_wPocCover %>% 
+ # filter(Location=="Cabral")
 
-model_CPocCover <- lm(log(sum_total+1) ~ SpeciesCounts, data= EnvData_wPocCover_C) 
-summary(model_CPocCover)
+#model_CPocCover <- lm(log(sum_total+1) ~ SpeciesCounts, data= EnvData_wPocCover_C) 
+#summary(model_CPocCover)
 
 ```
 
