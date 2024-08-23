@@ -42,7 +42,7 @@ RecruitmentCounts2.1 <- read_csv((here::here("Data", "RecruitmentCounts2.1.csv")
 ```
 
 ## Tidy data and join in Danielle's Poc cover data 
-a) filter out the sand and hard substrate categories and b) sum the totals by cowtagid to get percent cover of the biotics 
+a) filter out the sand and hard substrate categories and b) sum the totals by cowtagid to get percent cover of the biotics c) calcualte percent cover of P. acuta based on total amount of biotics in the area 
 ```{r}
 Poc_cover_data2 <- Poc_cover_data %>% 
   select(!c("Date", "PhotoNum", "Notes")) %>% 
@@ -54,18 +54,23 @@ Poc_cover_data3 <- Poc_cover_data2 %>%
   filter(CowTagID!="VSEEP")
 
 Poc_cover_data4 <- Poc_cover_data2 %>% 
-   filter(Taxa=="Pocillopora acuta")
+  filter(Taxa=="Pocillopora acuta") %>% 
+  group_by(CowTagID) %>% 
+  mutate(SpeciesCounts_Poc = SpeciesCounts) %>% 
+  dplyr::select(!SpeciesCounts)
  
+### joins and drops CowTgs without P acuta data + correlated biotics counts for that CowTag 
 Poc_cover_data5 <- Poc_cover_data4 %>% 
   left_join(Poc_cover_data3) %>% 
-  group_by(CowTagID, Location, SpeciesCounts,total_count_biotics ) %>% 
-  dplyr::summarise(percent_cover = (SpeciesCounts/total_count_biotics)*(100))
+  group_by(CowTagID, Location, SpeciesCounts_Poc,total_count_biotics ) %>% 
+  dplyr::summarise(percent_cover = (SpeciesCounts_Poc/total_count_biotics)*(100))
 
 ##########################################
 ### THIS REMOVES SOME OF THE TILES BC NOT ALL TILES HAD P. ACUTA COUNTS 
 ##########################################
 EnvData_wPocCover <- EnvData_wrecruitcounts %>% 
   full_join(Poc_cover_data5) %>% 
+  mutate(percent_cover = ifelse(is.na(percent_cover), 0, percent_cover)) %>% ###  ADD IN ZERO FOR COWTAGS WITHOUT P ACUTA COUNTS 
   write_csv(here::here("Data", "EnvData_wPocCover.csv"))
 
 ##########################################
@@ -81,11 +86,12 @@ Poc_cover_data_withhardsub <- Poc_cover_data %>%
 ```
 
 ## Look at recruit totals by how many P acuta at the CowTagID
+-  might need to square root the percent cover data bc of the variances 
 
 ```{r}
 
 recruits_by_PocCover <- EnvData_wPocCover %>% 
-  ggplot(aes(x=percent_cover, 
+  ggplot(aes(x=sqrt(percent_cover), 
              y=log(sum_total+1), 
              color=Location)) + 
   geom_point(size=3) + 
@@ -93,9 +99,9 @@ recruits_by_PocCover <- EnvData_wPocCover %>%
   scale_color_manual(values=c("cornflowerblue", "salmon")) +
   geom_smooth(method=lm, 
               fill="cornsilk3", 
-              alpha=0.2) + ## alpha adjusts the transparency 
-  labs(x="% Cover of P. acuta Species found near tile location", 
-       y="Logged Total of Recruits")
+              alpha=0.2) #+ ## alpha adjusts the transparency 
+ #labs(x="% Cover of P. acuta Species found near tile location", 
+   #    y="Logged Total of Recruits")
 
 recruits_by_PocCover
 ggsave(here::here("Outputs", "RecruitmentTiles", "recruits_by_PocCover.jpg"))
@@ -119,28 +125,71 @@ ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "recruits_
 
 ```
 
+-  run models comparing nonlinear vs linear 
+-  **Results**: in the linear model (whether transformed or not), there is a significant effect of cover on the number of settlers but no difference in the average cover or settlers between locations   
+
+```{r}
+
+nonlinear_PacutaCover <- lm(log(sum_total+1) ~ percent_cover + percent_cover^2 , data = EnvData_wPocCover)
+
+anova(nonlinear_PacutaCover)
+summary(nonlinear_PacutaCover)
+AIC(nonlinear_PacutaCover)
+
+#### something is up with polynomial models (not working for the second degree)
+
+### with sqrt transformation 
+linear_PacutaCover_sqrt <- lm(log(sum_total+1) ~ sqrt(percent_cover)*Location, data = EnvData_wPocCover)
+
+anova(linear_PacutaCover_sqrt)
+summary(linear_PacutaCover_sqrt)
+AIC(linear_PacutaCover_sqrt)
+
+### withOUT sqrt transformation 
+linear_PacutaCover <- lm(log(sum_total+1) ~ percent_cover*Location, data = EnvData_wPocCover)
+
+anova(linear_PacutaCover)
+summary(linear_PacutaCover)
+AIC(linear_PacutaCover)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+#######################################################################################
+#######################################################################################
+
 ### create a similiar plot for recruits by just hard substrate 
 Currently getting an error (June 1st, 2024) because don't have substrate type in the EnvData_wPocCover df anymore 
 Should probably use PercentCover df and group into substrate -- might have code somehwere, currently tired 
+
 ```{r}
-EnvData_wPocCover_long <- EnvData_wPocCover %>% 
-  pivot_longer(cols=Sand:HardSubstrate, names_to = "SubstrateType", values_to = "SubstrateValues")
+#EnvData_wPocCover_long <- EnvData_wPocCover %>% 
+#  pivot_longer(cols=Sand:HardSubstrate, names_to = "SubstrateType", values_to = "SubstrateValues")
 
-recruits_by_HardSubstrate <- EnvData_wPocCover_long %>% 
-  ggplot(aes(x=SubstrateValues, 
-             y=log(sum_total+1), 
-             color=SubstrateType)) + 
-  geom_point(size=3) + 
-  theme_classic() + 
-  scale_color_manual(values=c("cornflowerblue", "salmon")) +
-  geom_smooth(method=lm, 
-              fill="cornsilk3", 
-              alpha=0.2) + 
-  labs(x="Percent Cover of Hard Substrate vs Sand", 
-       y="Logged Total of Recruits")
-recruits_by_HardSubstrate
+#recruits_by_HardSubstrate <- EnvData_wPocCover_long %>% 
+ # ggplot(aes(x=SubstrateValues, 
+       #      y=log(sum_total+1), 
+        #     color=SubstrateType)) + 
+#  geom_point(size=3) + 
+#  theme_classic() + 
+#  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+ # geom_smooth(method=lm, 
+           #   fill="cornsilk3", 
+            #  alpha=0.2) + 
+ # labs(x="Percent Cover of Hard Substrate vs Sand", 
+     #  y="Logged Total of Recruits")
+#recruits_by_HardSubstrate
 
-ggsave(here("Outputs", "RecruitmentTiles", "recruits_by_SubstrateType.jpg"))
+#ggsave(here("Outputs", "RecruitmentTiles", "recruits_by_SubstrateType.jpg"))
 
 
 ```
@@ -180,7 +229,14 @@ ggsave(here::here("Outputs", "RecruitmentTiles", "recruits_by_AllLiveCoral.jpg")
 
 ```
 
-#### run models comparing total live coral cover vs Poc cover at Varari 
+### run models comparing total live coral cover vs Poc cover at Varari 
+-  Results: 
+Varari: 
+- Poc cover: 0.044
+- Live coral: 0.0184
+Cabral: 
+- Poc cover: 0.54
+- Live coral: 0.44
 ```{r}
 
 ######################
@@ -227,16 +283,6 @@ model_CPocCover <- lm(log(sum_total+1) ~ SpeciesCounts, data= EnvData_wPocCover_
 summary(model_CPocCover)
 
 ```
-
-
-### ^^ Results: 
-Varari: 
-- Poc cover: 0.044
-- Live coral: 0.0184
-Cabral: 
-- Poc cover: 0.54
-- Live coral: 0.44
-
 
 
 

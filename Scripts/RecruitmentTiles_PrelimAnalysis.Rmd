@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE,
                       message = FALSE)
 ```
 
-## Load libraries 
+### Load libraries 
 ```{r}
 library(patchwork)
 library(tidyverse)
@@ -29,17 +29,26 @@ library(emmeans)
 library(modelr)
 ```
 
-## Bring in datasets
+### Bring in datasets
 ```{r}
 RecruitmentCounts <- read_csv(here::here("Data","Recruitment_Tiles_Counts.csv"))
+## raw tile counts/data
+
 AllChemData_August <- read_csv("https://raw.githubusercontent.com/njsilbiger/MooreaSGD_site-selection/main/Data/August2021/Allbiogeochemdata_QC.csv")
+
 AllChemData_March <- read_csv("https://raw.githubusercontent.com/njsilbiger/MooreaSGD_site-selection/main/Data/March2022/Allbiogeochemdata_QC_march_fdom2.csv")
+
+## use these dfs from github for water chem measuremnts at tile locations 
+
 PercentCover <- read_csv("https://raw.githubusercontent.com/dbarnas/Community_Functional_Diversity/main/Data/Full_Metadata.csv")
+## Danielle Barnas' percent cover data 
+
 pH <- read_csv(here::here("Data", "pHSlope.csv"))
+## calcualted pH data using Tris calibrations from settlement experiment 
 ```
 
 ### delete extra low tide from Varari on 08/06 in AUGUST dataframe and AVERAGE with March 
-## DONT FORGET TO REMOVE SEEP DATA !!! 
+### DONT FORGET TO REMOVE SEEP DATA !!! 
 ```{r}
 
 AllChemData_August2 <- AllChemData_August %>% 
@@ -53,7 +62,7 @@ AllChemData_March$Date <- mdy(AllChemData_March$Date)
 AllChemData_March2 <- AllChemData_March %>% 
   select(!c("Top_Plate_ID":"Plate_Seep", "Time", "DateTime", "TimeBlock", "M_C":"Lignin_Like")) %>% 
   filter(CowTagID!="CSEEP", CowTagID!="VSEEP", CowTagID!="VRC", CowTagID!="CRC", CowTagID!="CPIT", CowTagID!="CPIT_Bottom", CowTagID!="CSPRING_ROAD", CowTagID!="CSPRING_BEACH", CowTagID!="CSPRING_BEACH2", CowTagID!="VSPRING") %>% 
-  filter(TA > 2096)
+  filter(TA > 2096) ##outlier TA 
   
 
 AllChemData_seasonaverage <- AllChemData_August2 %>% 
@@ -62,7 +71,9 @@ AllChemData_seasonaverage <- AllChemData_August2 %>%
   
 ```
 
-## join dfs 
+#### join dfs 
+-  join Danielle's percent cover data with my personal recruitment count data from tiles 
+-  then join that new df with averaged water chem data from the tile location in situ 
 ```{r}
 
 full_CommunityRecruit <- PercentCover %>% 
@@ -79,7 +90,8 @@ full_envdataRecruits_avgseason <- full_CommunityRecruit %>%
 
 ```
 
-# tidy this now fully complete and joined dataset 
+### tidy this now fully complete and joined dataset 
+-  may not be necessary, left comments out 
 ```{r}
 #full_envdataRecruits_avgseason <- full_envdataRecruits_avgseason %>% 
   #select(!c("Top_Plate_ID", "Bottom_Plate_ID", "Jamie_Plate_ID", "Time", "DateTime", "M_C":"Lignin_Like"))
@@ -89,7 +101,8 @@ full_envdataRecruits_avgseason <- full_CommunityRecruit %>%
 
 ```
 
-# group and average the day/night and high/low tide measurements for August AND March  - average together 
+### group and average the day/night and high/low tide measurements for August AND March  - average together 
+-  goal is to get just one measurement per rebar location 
 ```{r}
 ## calculating MEAN only  
 full_envdataRecruits_avgseason2 <- full_envdataRecruits_avgseason %>% 
@@ -126,7 +139,10 @@ full_envdataRecruits_avgseason2 <- full_envdataRecruits_avgseason %>%
   
 ```
 
-## group percent cover data and tidy into useful format 
+### group percent cover data and tidy into useful format 
+-  tidying up the percent cover, getting rid of extra information, pivot to long format to set up in orientation that I can use the data with 
+-  created PercentCover3 df which has the percent cover per rebar location at site of dead coral, live coral, rubble, and sand 
+-  also created PercentCover_BinomialSubstrate df which separates categories into sand vs hard substrate s
 ```{r}
 PercentCover1 <- PercentCover %>% 
   dplyr::select(!c("del15N":"N_percent", "adj_CT_depth_cm", "meanRugosity"))
@@ -159,7 +175,8 @@ PercentCover_BinomialSubstrate <- PercentCover3 %>%
 ```
 
 
-## Calcualting CV, mean, max, min from averaged August and March data 
+### Calcualting CV, mean, max, min from averaged August and March data 
+-  this section calculates all the mins, maxes, CVs, and means for the averaged water chem data 
 
 ```{r}
 ####################
@@ -408,13 +425,11 @@ CommComp_recruit_seasonAvg_envdata_longCV <- CommComp_recruit_seasonavg_envdata 
  # select(!c("sal_avg":"ammonia_min", "value"))
 ```
 
+### calculate CV, mean, max, min of recruit totals per CowTagID ^^^^^^ (as of May 10th, 2024 - code was working)
+-  also log transformed the recruit totals (can do within plot or create new column) 
+-  put logged totals on y-axis, with nutrient data on x-axis 
 
-# Worked on May 9-10
-### calculate CV, mean, max, min of recruit totals per CowTagID ^^^^^^
-### also log transform the recruit totals (can do within plot or create new column)
-### put logged totals on y-axis, with nutrient data on x-axis 
-
-##### PLOTS these are for MAX VALUES only - for Varari and Cabral per season 
+### PLOTS these are for MAX VALUES only - for Varari and Cabral per season 
 ```{r}
 ## all env params - for Varari 
 Recruit_EnvMax_plot <- CommComp_recruit_seasonAvg_envdata_longMAX %>%
@@ -464,7 +479,7 @@ ggsave(here("Outputs","RecruitmentTiles", "CalculatedEnvParams", "Max_averageden
 
 ```
 
-###### these are for CV VALUES only 
+#### these are for CV VALUES only 
 ```{r}
 Recruit_EnvCV_plot <- CommComp_recruit_seasonAvg_envdata_longCV %>%
 #  filter(env_params=="silicate_avg") %>% 
@@ -494,7 +509,7 @@ ggsave(here("Outputs","RecruitmentTiles", "CalculatedEnvParams", "CV_envparams_a
 
 ```
 
-###### these are for MEAN VALUES only 
+#### these are for MEAN VALUES only 
 ```{r}
 Recruit_EnvMean_plot <- CommComp_recruit_seasonAvg_envdata_longMEAN %>%
 #  filter(env_params=="silicate_avg") %>% 
@@ -543,7 +558,7 @@ ggsave(here("Outputs","RecruitmentTiles", "CalculatedEnvParams", "Avg_envparams.
       # width=20, height=15)
 ```
 
-###### these are for MIN VALUES only 
+#### these are for MIN VALUES only 
 ```{r}
 Recruit_EnvMin_plot <- CommComp_recruit_seasonAvg_envdata_longMIN %>%
 #  filter(env_params=="silicate_avg") %>% 
@@ -593,9 +608,9 @@ ggsave(here("Outputs","RecruitmentTiles", "CalculatedEnvParams", "Min_envparams_
 ```
 
 
-#### run STATISTICAL models using MEAN values of env data from August and March 
-## filtered by site, with ONLY logged values (raw data is not normal)
-## and need to do both linear and nonlinear models 
+### run STATISTICAL models using MEAN values for EACH env parameter (from August and March data), includes silicate, NN, phosphate, etc
+-  filtered by site, with ONLY logged values (raw data is not normal)
+-  and need to do both linear and nonlinear models 
 
 ```{r}
 ## re-pivot the df so each env is individual 
@@ -802,9 +817,9 @@ AIC(meanenv_recruit_nonlinearmodel_temp_C)
 
 ```
 
-#### run STATISTICAL models using MIN values of env data 
-## filtered by site, with and without logged values 
-## dont count unlogged - because raw data is not normal 
+### run STATISTICAL models using MIN values of env data 
+-  filtered by site, with and without logged values 
+-  dont count unlogged - because raw data is not normal 
 
 ```{r}
 ## re-pivot the df so each env is individual 
@@ -955,8 +970,8 @@ summary(minenv_recruit_model_temp_C2)
 ```
 
 
-#### run STATISTICAL models using MAX values of env data 
-## filtered by site, with only logged values 
+### run STATISTICAL models using MAX values of env data 
+-  filtered by site, with only logged values 
 
 ```{r}
 ## re-pivot the df so each env is individual 
@@ -1050,8 +1065,8 @@ summary(maxenv_recruit_model_temp_C2)
 ```
 
 
-#### run STATISTICAL models using CV values of env data 
-## filtered by site, with only logged values 
+### run STATISTICAL models using CV values of env data 
+-  filtered by site, with only logged values 
 
 ```{r}
 ## re-pivot the df so each env is individual 
@@ -1144,13 +1159,10 @@ summary(CVenv_recruit_model_temp_C2)
 ```
 
 
-
-
 ###################################################################
 ###################################################################
 
-
-###### these are for MIN VALUES only 
+#### these are extra plots for MIN VALUES only 
 ```{r}
 Recruit_EnvMin_plot <- CommComp_recruit_envdata_longMIN %>%
 #  filter(env_params=="silicate_avg") %>% 
@@ -1176,7 +1188,7 @@ ggsave(here("Outputs","RecruitmentTiles", "Min_envparams.jpg"),
 ###################################################################
 ###################################################################
 
-#### compare live and dead recruits (last updated May 14th) 
+### compare live and dead recruits (last updated May 14th, 2024) 
 ```{r}
 CommComp_recruit_envdata_pivot <- CommComp_recruit_envdata %>%
   pivot_longer(cols = sum_total_alive:sum_total_dead, names_to = "Dead_Alive", values_to = "Total")
@@ -1289,8 +1301,8 @@ ggsave(here("Outputs","RecruitmentTiles", "Dead_vs_Alive_EnvData.jpg"),
 ```
 
 
-#### plot the dead vs alive as scatterplot with 0 slope 
-#### then also calculate the actual slope and residuals using *regression* model and see how compares to a 0 slope 
+### plot the dead vs alive as scatterplot with 0 slope 
+### then also calculate the actual slope and residuals using *regression* model and see how compares to a 0 slope 
 ```{r}
 ### color by silicate 
 CommComp_recruit_envdata2 <- CommComp_recruit_envdata %>% 
@@ -1531,17 +1543,20 @@ anova(V_resid_model1)
 
 
 
-NOTES: 
-## impact of GW is on total # of recruits getting to plate AND who stays alive/dies - more are surviving than expected ## this is a log process bc density dependence 
-#### do each env parameters affect the expected relationship from dead vs alive 
+## NOTES: 
+-  impact of GW is on total # of recruits getting to plate AND who stays alive/dies - more are surviving than expected ## this is a log process bc density dependence
+-  do each env parameters affect the expected relationship from dead vs alive 
 
 ###################################################################
 ###################################################################
 
-NEXT SECTION 
-#### do percent cover comparison 
+# NEXT SECTION 
+
+### Do percent cover comparison 
 
 ```{r}
+##################
+### pivot df 
 SubstratePref <- PercentCover_BinomialSubstrate %>% 
   full_join(totalcounts_tilelocation, join_by(CowTagID, Location)) %>% 
   select(!(SGD_level)) %>% 
@@ -1549,6 +1564,10 @@ SubstratePref <- PercentCover_BinomialSubstrate %>%
   mutate(substrate=name) %>% 
   select(!(name))
 
+###################
+## plot 
+
+## Cabral 
 SubstrateBreakdown_plotC <- SubstratePref %>% 
   filter(Location=="Cabral") %>% 
   ggplot(aes(x=CowTagID,
@@ -1563,7 +1582,7 @@ SubstrateBreakdown_plotC <- SubstratePref %>%
 
 SubstrateBreakdown_plotC
 
-####
+## Varari 
 SubstrateBreakdown_plotV <- SubstratePref %>% 
   filter(Location=="Varari") %>% 
   ggplot(aes(x=CowTagID,
@@ -1626,12 +1645,11 @@ ggsave(here("Outputs","RecruitmentTiles", "VarariRecruits_Substrate.jpg"),
 
 
 
-
-
 ###########################################################################################
 ## Old plots April 2024 
+-  not really using and haven't cleaned, but kept as back-up 
 
-## these plots show rough SGD estimate, taken from silicate kriging plot with total recruit counts per plate 
+### these plots show rough SGD estimate, taken from silicate kriging plot with total recruit counts per plate 
 
 ```{r}
 ## try to plot basics for Varari 

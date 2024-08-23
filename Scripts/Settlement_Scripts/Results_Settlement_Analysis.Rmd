@@ -34,13 +34,20 @@ library(emmeans)
 
 ## Bring in datasets
 ```{r}
-SettlementCounts <- read_csv(here::here("Data","2024_SettlementCounts.csv"))
+SettlementCounts <- read_csv(here::here("Data","SettlementCounts_edited.csv"))
+## raw settlement counts from the experiment BUT edited from "SettlementExp_PrelimAnalysis" Markdown to include calculated counts of settled vs dead 
+
 pH <- read_csv(here::here("Data", "pHSlope.csv"))
+## calcualted pH from the temp and mV data within each of the treatment bins 
+
 WaterChem<-read_csv(here::here("Data", "2024_WaterChemMeasurements.csv"))
+## raw water chem measurements from each of the treatment bins throughout the experiment 
+
 ```
 
-### For time being, forget about blocks and days and combine all results together for setttlement experiment 
-- to test silicate on the x axis and expected proportions of settlers on the y 
+### For time being, forget about blocks and days and combine all results together for settlement experiment 
+-  Goal: to test silicate on the x axis and _expected proportions_ of settlers on the y 
+-  See SettlementExp_PrelimAnalysis Markdown to cross reference
 
 ```{r}
 ###################################
@@ -190,70 +197,5 @@ SettlementCounts_plotted3 <- SettlementCounts_joined2 %>%
 SettlementCounts_plotted3
 
 ```
-
-### rework with silicate data - August 7th, 2024 
-```{r}
-WaterChem <- WaterChem %>% 
-  mutate(TrisCalDate = ymd(TrisCalDate), 
-         date=mdy(date)) 
-
-waterchemdata <- pH %>% 
-  full_join(WaterChem, join_by(treatmentID_rep, experiment_number, sampling_period, TrisCalDate, time, date, orion_pH, mV, temp, salinity, light, note, TA, NN, phosphate, ammonia, silicate)) 
-
-SettlementCounts <- SettlementCounts %>% 
-  mutate(date = mdy(date))
-
-fulldata <- waterchemdata %>% 
-  full_join(SettlementCounts, join_by(treatmentID_rep, treatment_level, date)) #### not working perfecetly as of May 12th 2024 ---- not all water chem data is showing up 
-
-
-WaterChem_edit <- WaterChem %>% 
-  
-  
-
-```
-
-#### Craig meeting - August 7th, 2024 
-- focus on Cabral days first 
-
-```{r}
-SettlementCounts_Cabral <- SettlementCounts %>% 
-  filter(site=="Cabral") %>% 
-  dplyr::select(-c("notes", "swimming":"side", "rep_number", "treatmentID_rep", "countcheck")) %>% 
-  group_by(treatment_level, site, spawning_day) %>%
-  dplyr::summarize(settled2 = sum(settled),
-                   totalpossible=20*5,
-                   proportionsettled=settled2/totalpossible)
-
-
-
-## model = 
-Cabralsettlement_model <- lmer(proportionsettled~treatment_level + (1|spawning_day), data =SettlementCounts_Cabral)
-
-summary(Cabralsettlement_model)
-
-
-## significant difference from ambient ?? 
-
-
-
-Cabralsettlementplot <- SettlementCounts_Cabral %>% 
-  ggplot(aes(x=treatment_level, 
-             y=proportionsettled, 
-             fill=spawning_day)) + 
-  geom_col(position = position_dodge()) + 
-  scale_x_discrete(limits = c("Ambient", "Low", "Medium", "High")) + 
-  scale_fill_manual(values=pnw_palette("Bay", n=6)) 
-
-
-Cabralsettlementplot
-```
-
-
-### Nyssa notes from meeting on August 1st, 2023 
-```{r}
-
-```
-
 
 
