@@ -338,9 +338,11 @@ SettlementCounts_editV <- SettlementCount_updated %>%
   filter(site=="Varari") %>% 
   dplyr::select(-c("notes", "swimming":"spawning_day", "rep_number", "treatmentID_rep", "countcheck")) %>% 
   group_by(treatment_level, site) %>% 
-  dplyr::summarize(settled2 = sum(settled)) %>% 
-  dplyr::mutate(totalpossible = 20 * 11) %>% 
-  dplyr::mutate(proportionsettled = settled2 / totalpossible)
+  dplyr::summarize(settled2 = sum(settled), 
+                   totalpossible = 20 * 11, 
+                   proportionsettled = settled2 / totalpossible, 
+                   avgproportion = mean(proportionsettled),
+                   seproportion = sd(proportionsettled) / sqrt(n()))
 
 SettlementCount_editC <- SettlementCount_updated %>% 
   filter(site=="Cabral") %>% 
@@ -448,6 +450,11 @@ SettlementCounts_bothsites <- SettlementCount_updated %>%
   dplyr::summarize(mean_proportionsettled=mean(proportion_settled), 
                 se = sd(proportion_settled) / sqrt(n())) %>% 
   ungroup() 
+
+##### JUST RAW PROPORTIONS, no averages for treatment group 
+SettlementCounts_bothsites_rawproportions <- SettlementCount_updated %>% 
+  dplyr::select(-c("notes", "countcheck")) %>% 
+  dplyr::mutate(rawproportion_settled = settled/20) 
   
 ###################################
 ### now plot with SE bars 
@@ -515,10 +522,10 @@ SettlementCounts_plotted4
 ```{r}
 ###########
 ## by treatment level 
-silicate_settlement1 <- SettlementCount_updated %>% 
+silicate_settlement1 <- SettlementCounts_bothsites_rawproportions %>% 
   filter(site=="Varari") %>% 
   ggplot(aes(x=silicate, 
-             y=settled, 
+             y=rawproportion_settled, 
              color=treatment_level,
              shape = as.factor(rep_number), 
              size=as.factor(spawning_day))) + 
@@ -531,9 +538,9 @@ silicate_settlement1
 
 ##########
 ## by spawning day  
-silicate_settlement2 <- SettlementCount_updated %>% 
+silicate_settlement2 <- SettlementCounts_bothsites_rawproportions %>% 
   ggplot(aes(x=silicate, 
-             y=settled, 
+             y=rawproportion_settled, 
              color=treatment_level, 
              shape = as.factor(rep_number))) + 
   geom_point(size=3)  + 
@@ -545,9 +552,9 @@ silicate_settlement2
 
 ##########
 ## general 
-silicate_settlement3 <- SettlementCount_updated %>% 
+silicate_settlement3 <- SettlementCounts_bothsites_rawproportions %>% 
   ggplot(aes(x=silicate, 
-             y=settled, 
+             y=rawproportion_settled, 
              color=treatment_level)) + 
   geom_point(size=2)  + 
   scale_color_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
@@ -564,13 +571,13 @@ ggsave(here("Outputs", "SettlementExperiment", "Prelim", "silicate_settled.jpg")
 ## take avg silciate per treatment 
 ########################################
 
-SettlementCount_silicateavg <- SettlementCount_updated %>% 
+SettlementCount_silicateavg <- SettlementCounts_bothsites_rawproportions %>% 
   group_by(treatment_level) %>% 
-  mutate(avg_silicate= mean(silicate))
+  dplyr::mutate(avg_silicate= mean(silicate))
 
 silicate_settlement4 <- SettlementCount_silicateavg %>% 
   ggplot(aes(x=avg_silicate, 
-             y=settled, 
+             y=rawproportion_settled, 
              color=treatment_level)) + 
   geom_point(size=2)  + 
   scale_color_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
@@ -586,26 +593,65 @@ silicate_settlement4
 - replaced silicate with NN and P 
 
 ```{r}
-nitrate_settlement <- SettlementCount_updated %>% 
+nitrate_settlementV <- SettlementCounts_bothsites_rawproportions %>% 
+  filter(site=="Varari") %>% 
   ggplot(aes(x=NN, 
-             y=settled, 
+             y=rawproportion_settled, 
              color=treatment_level)) + 
   geom_point(size=2)  + 
-  facet_wrap(~site, scales="free_x") +
+  facet_wrap(site~spawning_day, scales="free_x") +
   scale_color_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
                     limits=c("Ambient", "Low", "Medium", "High")) + 
   guides(color = "none") +  
   theme_bw()
   
-nitrate_settlement
+nitrate_settlementV
 
-ggsave(here("Outputs", "SettlementExperiment", "Prelim", "NN_settled.jpg"), 
+ggsave(here("Outputs", "SettlementExperiment", "Prelim", "NN_settledV.jpg"), 
        width=10, height=8)
 
+nitrate_settlementC <- SettlementCounts_bothsites_rawproportions %>% 
+  filter(site=="Cabral") %>% 
+  ggplot(aes(x=NN, 
+             y=rawproportion_settled, 
+             color=treatment_level)) + 
+  geom_point(size=2)  + 
+ facet_wrap(~site, scales="free_x") +
+  scale_color_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
+                    limits=c("Ambient", "Low", "Medium", "High")) + 
+  guides(color = "none") +  
+  theme_bw()
+  
+nitrate_settlementC
 
-phosphate_settlement <- SettlementCount_updated %>% 
+ggsave(here("Outputs", "SettlementExperiment", "Prelim", "NN_settledC.jpg"), 
+       width=10, height=8)
+
+#######################
+## phosphate 
+
+phosphate_settlementV <- SettlementCounts_bothsites_rawproportions %>% 
+  filter(site=="Varari") %>% 
   ggplot(aes(x=phosphate, 
-             y=settled, 
+             y=rawproportion_settled, 
+             color=treatment_level)) + 
+  geom_point(size=2)  + 
+  facet_wrap(site~spawning_day, scales="free_x") +
+  scale_color_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
+                    limits=c("Ambient", "Low", "Medium", "High")) + 
+  guides(color = "none") +  
+  theme_bw()
+  
+phosphate_settlementV
+
+ggsave(here::here("Outputs", "SettlementExperiment", "Prelim", "PO4_settledV.jpg"), 
+       width=10, height=8)
+
+###
+phosphate_settlementC <- SettlementCounts_bothsites_rawproportions %>% 
+  filter(site=="Cabral") %>% 
+  ggplot(aes(x=phosphate, 
+             y=rawproportion_settled, 
              color=treatment_level)) + 
   geom_point(size=2)  + 
   facet_wrap(~site, scales="free_x") +
@@ -614,16 +660,17 @@ phosphate_settlement <- SettlementCount_updated %>%
   guides(color = "none") +  
   theme_bw()
   
-phosphate_settlement
+phosphate_settlementC
 
-ggsave(here("Outputs", "SettlementExperiment", "Prelim", "PO4_settled.jpg"), 
+ggsave(here::here("Outputs", "SettlementExperiment", "Prelim", "PO4_settledC.jpg"), 
        width=10, height=8)
+
 
 ########################################
 ## patch all 3 env param plots together 
 ########################################
 
-phosphate_settlement / nitrate_settlement / silicate_settlement3
+phosphate_settlementC + phosphate_settlementV / nitrate_settlementC + nitrate_settlementV / silicate_settlement3
 ggsave(here("Outputs", "SettlementExperiment", "Prelim", "EnvParamsPlot_vs_settled.jpg"), 
        width=10, height=15)
 

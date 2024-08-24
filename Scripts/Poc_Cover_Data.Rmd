@@ -25,6 +25,7 @@ library(PNWColors)
 library(factoextra)
 library(devtools)
 library(ggbiplot)
+library(car)
 ```
 
 
@@ -102,6 +103,7 @@ recruits_by_PocCover <- EnvData_wPocCover %>%
   theme_classic() + 
   scale_color_manual(values=c("cornflowerblue", "salmon")) +
   geom_smooth(method=lm, 
+              formula="y~poly(x,2)", 
               fill="cornsilk3", 
               alpha=0.2) #+ ## alpha adjusts the transparency 
  #labs(x="% Cover of P. acuta Species found near tile location", 
@@ -117,7 +119,8 @@ recruits_by_PocCover_facet <- EnvData_wPocCover %>%
   geom_point(size=3) + 
   theme_classic() + 
   scale_color_manual(values=c("cornflowerblue", "salmon")) +
-  geom_smooth(method=lm, 
+  geom_smooth(method=lm,
+              formula="y~poly(x,2)", 
               fill="cornsilk3", 
               alpha=0.2) + ## alpha adjusts the transparency 
   facet_wrap(~Location, scales="free") + 
@@ -157,6 +160,110 @@ summary(linear_PacutaCover)
 AIC(linear_PacutaCover)
 
 ```
+
+
+### Transform Varari data 
+-  try log, sqrt, cube root, reciprocal, exponential, **arc sine**, z-score, and rank transformations
+-  Ended up going with: 
+
+
+```{r}
+
+### arc sine transformation 
+EnvData_wPocCover_Vtransformed <- EnvData_wPocCover %>% 
+  filter(Location=="Varari") %>% 
+  mutate(transformed_percentcover = asin(sqrt(percent_cover/100)))
+
+recruits_by_PocCover_facet_transformed_V <- EnvData_wPocCover_Vtransformed %>% 
+  ggplot(aes(x=transformed_percentcover, 
+             y=log(sum_total+1), 
+             color=Location)) + 
+  geom_point(size=3) + 
+  theme_classic() + 
+  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  geom_smooth(method=lm,
+              formula="y~poly(x,2)", 
+              fill="cornsilk3", 
+              alpha=0.2) #+ ## alpha adjusts the transparency 
+ # facet_wrap(~Location, scales="free") + 
+ # labs(x="Transformed % Cover of P. acuta Species found near tile location", 
+      # y="Logged Total of Recruits")
+
+recruits_by_PocCover_facet_transformed_V
+
+qqp(EnvData_wPocCover_Vtransformed$transformed_percentcover, "norm")
+
+
+### log transformation 
+EnvData_wPocCover_Vtransformed2 <- EnvData_wPocCover %>% 
+  filter(Location=="Varari") %>% 
+  mutate(transformed_percentcover = log(percent_cover + 1))
+
+recruits_by_PocCover_facet_transformed_V2 <- EnvData_wPocCover_Vtransformed2 %>% 
+  ggplot(aes(x=transformed_percentcover, 
+             y=log(sum_total+1), 
+             color=Location)) + 
+  geom_point(size=3) + 
+  theme_classic() + 
+  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  geom_smooth(method=lm,
+              formula="y~poly(x,2)", 
+              fill="cornsilk3", 
+              alpha=0.2) 
+
+recruits_by_PocCover_facet_transformed_V2
+
+qqp(EnvData_wPocCover_Vtransformed2$transformed_percentcover, "norm")
+
+### square root transformation 
+EnvData_wPocCover_Vtransformed3 <- EnvData_wPocCover %>% 
+  filter(Location=="Varari") %>% 
+  mutate(transformed_percentcover = sqrt(percent_cover + 1))
+
+recruits_by_PocCover_facet_transformed_V3 <- EnvData_wPocCover_Vtransformed3 %>% 
+  ggplot(aes(x=transformed_percentcover, 
+             y=log(sum_total+1), 
+             color=Location)) + 
+  geom_point(size=3) + 
+  theme_classic() + 
+  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  geom_smooth(method=lm,
+              formula="y~poly(x,2)", 
+              fill="cornsilk3", 
+              alpha=0.2) 
+
+recruits_by_PocCover_facet_transformed_V3
+
+qqp(EnvData_wPocCover_Vtransformed3$transformed_percentcover, "norm")
+
+
+### logit transformation 
+EnvData_wPocCover_Vtransformed4 <- EnvData_wPocCover %>% 
+  filter(Location=="Varari") %>% 
+  mutate(percent_cover_transformed = (percent_cover + 0.01) / 100,
+         transformed_percentcover2 = log(percent_cover_transformed / (1 - percent_cover_transformed)))
+
+recruits_by_PocCover_facet_transformed_V4 <- EnvData_wPocCover_Vtransformed4 %>% 
+  ggplot(aes(x=transformed_percentcover2, 
+             y=log(sum_total+1), 
+             color=Location)) + 
+  geom_point(size=3) + 
+  theme_classic() + 
+  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  geom_smooth(method=lm,
+              formula="y~poly(x,2)", 
+              fill="cornsilk3", 
+              alpha=0.2) 
+
+recruits_by_PocCover_facet_transformed_V4
+
+
+qqp(EnvData_wPocCover_Vtransformed4$transformed_percentcover2, "norm")
+
+
+```
+
+
 
 
 

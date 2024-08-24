@@ -240,10 +240,33 @@ PocCover_vs_Silicate2
 ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "silicate_by_PocCover.jpg"), 
        width=10, height=7)
 
+####################
+## PocCover_vs_Silicate with poc cover as sqrt
+
+sqrtPocCover_vs_Silicate <- EnvData_wPocCover %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=sqrt(percent_cover), 
+             color=Location)) + 
+  geom_point(size=2) + 
+  theme_classic() + 
+  facet_wrap(~Location, scales="free") + 
+  geom_smooth(method=lm, 
+              formula="y~poly(x,2)",
+              fill="cornsilk3", 
+              alpha=0.2) ## alpha adjusts the transparency 
+  
+sqrtPocCover_vs_Silicate
+
+
+sqrtPocCover_vs_Silicate + PocCover_vs_Silicate
 ```
 
 
 -  run models (run sites separately and try a multiple regresssion )
+
+**Results**: 
+-  
+
 ```{r}
 ## Varari 
 PocCover_vs_Silicate_Mregression_V <- lm(log(sum_total+1) ~ poly(silicate_avg, 2) + poly(percent_cover,2), data=EnvData_wPocCover %>% 
