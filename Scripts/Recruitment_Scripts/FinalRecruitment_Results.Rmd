@@ -2,7 +2,8 @@
 title: "FinalRecruitment_Results"
 author: "Hannah Merges"
 date: "`r Sys.Date()`"
-output: html_document
+output: 
+  rmdformats::readthedown
 ---
 
 ```{r setup, include=FALSE}
@@ -102,6 +103,8 @@ Plot: percent cover on the x, total recruit counts on the y, faceted by location
 
 Stats: 
 -  run model comparison between linear and nonlinear 
+-  transformed Varari data 
+-  **need to choose whether to run nonlinear or linear** 
 
 **Results**: SEE POC_COVER_DATA MARKDOWN FOR RESULTS AND MODELS 
 
@@ -120,11 +123,41 @@ recruits_by_PocCover <- EnvData_wPocCover %>%
   labs(x="% Cover of P. acuta Species found near tile location", 
        y="Logged Total of Recruits")
 
-recruits_by_PocCover
-ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "recruits_by_PocCover.jpg"))
+#recruits_by_PocCover
+#ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "recruits_by_PocCover.jpg"))
 
 
 ### run models here 
+
+###############################
+## transformed Varari data 
+###############################
+
+EnvData_wPocCover_C <- EnvData_wPocCover %>% 
+  filter(Location=="Cabral") 
+
+EnvData_wPocCover_Vtransformed <- EnvData_wPocCover %>% 
+  filter(Location=="Varari") %>% 
+  mutate(percent_cover = asin(sqrt(percent_cover/100)))
+
+transformedPocdata <- EnvData_wPocCover_Vtransformed %>% 
+  bind_rows(EnvData_wPocCover_C)
+
+## plot 
+plot_transformedV <- transformedPocdata %>% 
+  ggplot(aes(x=percent_cover, 
+             y=log(sum_total+1), 
+             color=Location)) + 
+  geom_point(size=3) + 
+  theme_classic() + 
+  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  geom_smooth(method=lm,
+              formula="y~poly(x,2)", 
+              fill="cornsilk3", 
+              alpha=0.2) + 
+  facet_wrap(~Location, scales="free_x")
+
+plot_transformedV
 
 
 ```
@@ -151,6 +184,7 @@ recruits_by_silicate <- EnvData_wPocCover %>%
   geom_point(size=3) + 
   theme_classic() + 
   scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  facet_wrap(~Location) +
   geom_smooth(method=lm,
               formula="y~poly(x,2)",
               fill="cornsilk3", 
@@ -162,7 +196,7 @@ recruits_by_silicate
 
 #################
 ## join two plots together (silicate data and Poc cover data) into same plot 
-recruits_by_silicate + recruits_by_PocCover
+recruits_by_silicate + plot_transformedV
 ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "PocCoverANDSilicate.jpg"), 
        width=10, height=7)
 
@@ -235,10 +269,10 @@ PocCover_vs_Silicate2 <- EnvData_wPocCover %>%
               fill="cornsilk3", 
               alpha=0.2) ## alpha adjusts the transparency 
   
-PocCover_vs_Silicate2
+#PocCover_vs_Silicate2
 
-ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "silicate_by_PocCover.jpg"), 
-       width=10, height=7)
+#ggsave(here::here("Outputs", "RecruitmentTiles", "Results", "Prelim", "silicate_by_PocCover.jpg"), 
+      # width=10, height=7)
 
 ####################
 ## PocCover_vs_Silicate with poc cover as sqrt
@@ -258,7 +292,7 @@ sqrtPocCover_vs_Silicate <- EnvData_wPocCover %>%
 sqrtPocCover_vs_Silicate
 
 
-sqrtPocCover_vs_Silicate + PocCover_vs_Silicate
+#sqrtPocCover_vs_Silicate + PocCover_vs_Silicate
 ```
 
 

@@ -164,15 +164,31 @@ AIC(linear_PacutaCover)
 
 ### Transform Varari data 
 -  try log, sqrt, cube root, reciprocal, exponential, **arc sine**, z-score, and rank transformations
+-  honestly they all look the same other than logit 
 -  Ended up going with: 
 
 
 ```{r}
+## check normality for Cabral 
+EnvData_wPocCover_C <- EnvData_wPocCover %>% 
+  filter(Location=="Cabral") 
+
+qqp(EnvData_wPocCover_C$percent_cover, "norm") ## pretty good 
+
+## check normality for Varari 
+EnvData_wPocCover_V <- EnvData_wPocCover %>% 
+  filter(Location=="Varari") 
+
+qqp(EnvData_wPocCover_V$percent_cover, "norm") ## not as good 
+
+########################################
+### transform Varari data 
+########################################
 
 ### arc sine transformation 
 EnvData_wPocCover_Vtransformed <- EnvData_wPocCover %>% 
   filter(Location=="Varari") %>% 
-  mutate(transformed_percentcover = asin(sqrt(percent_cover/100)))
+  mutate(percent_cover = asin(sqrt(percent_cover/100)))
 
 recruits_by_PocCover_facet_transformed_V <- EnvData_wPocCover_Vtransformed %>% 
   ggplot(aes(x=transformed_percentcover, 
@@ -260,6 +276,30 @@ recruits_by_PocCover_facet_transformed_V4
 
 qqp(EnvData_wPocCover_Vtransformed4$transformed_percentcover2, "norm")
 
+
+```
+
+### join newly transformed data back in with Cabral data 
+```{r}
+
+transformedPocdata <- EnvData_wPocCover_Vtransformed %>% 
+  bind_rows(EnvData_wPocCover_C)
+
+## plot 
+plot_transformedV <- transformedPocdata %>% 
+  ggplot(aes(x=percent_cover, 
+             y=log(sum_total+1), 
+             color=Location)) + 
+  geom_point(size=3) + 
+  theme_classic() + 
+  scale_color_manual(values=c("cornflowerblue", "salmon")) +
+  geom_smooth(method=lm,
+              formula="y~poly(x,2)", 
+              fill="cornsilk3", 
+              alpha=0.2) + 
+  facet_wrap(~Location, scales="free_x")
+
+plot_transformedV
 
 ```
 

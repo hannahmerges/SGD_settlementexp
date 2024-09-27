@@ -500,15 +500,15 @@ SettlementCounts_bothsites2 <- SettlementCount_updated %>%
   
 
 SettlementCounts_plotted4 <- SettlementCounts_bothsites2 %>% 
-  ggplot(aes(x=treatment_level, 
+  ggplot(aes(x=mean_silicate, 
              y=mean_proportionsettled, 
              color=treatment_level, 
              shape=site)) +
   geom_point(size=3) + 
-  #geom_errorbar(aes(ymin = mean_proportionsettled - se, 
-                   # ymax = mean_proportionsettled + se), 
-                # width = 0.2, 
-               # position = position_dodge(0.7)) +
+   geom_errorbar(aes(ymin = mean_proportionsettled - se, 
+                    ymax = mean_proportionsettled + se), 
+                 width = 0.2, 
+                position = position_dodge(0.7)) +
   scale_color_manual(values=c("#31c2df", "#38a45a", "#e8c40b", "#f36e26"), 
                     limits = c("Ambient", "Low", "Medium", "High")) + 
 #  facet_wrap(~site, scales="free_y") +
