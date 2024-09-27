@@ -44,13 +44,12 @@ EnvData_wPocCover <- read_csv(here::here("Data", "EnvData_wPocCover.csv"))
 ## Models based on hypotheses
 ```{r}
 
-poc_cover <- lm(percent_cover ~ silicate_avg + sum_total, data=EnvData_wPocCover)
-recruits <- lm(sum_total ~ silicate_avg + log(percent_cover+1), data=EnvData_wPocCover)
+ poc_cover <- lm(percent_cover ~ silicate_avg + poly(log(sum_total+1), 2), data=EnvData_wPocCover)
+recruits <- lm(log(sum_total+1) ~ silicate_avg + poly(percent_cover,2), data=EnvData_wPocCover)
 
 
 qqp(resid(poc_cover),"norm") 
-qqp(resid(recruits),"norm") ### may need to transform in a different way 
-
+qqp(resid(recruits),"norm")
 ```
 
 
@@ -65,12 +64,14 @@ qqp(resid(recruits),"norm") ### may need to transform in a different way
 ## create the sem model, needed to remove reciprocal relationsship/path of sumtotal ~ percentcover because it was breaking the information matrix in lavaaan 
 
 sem_modelV <- '
-  # Silicate_avg impacts recruits and percent_cover
+  # Silicate_avg impacts recruits and percent_cover (linear)
   logsum_total ~ silicate_avg
-  logpercent_cover ~ silicate_avg
+  percent_cover ~ silicate_avg
   
-  # Recruits impacts percent_cover
-  logpercent_cover ~ logsum_total
+  # Polynomial terms: recruits and percent_cover (quadratic)
+  logsum_total ~ percent_cover + percent_cover_sq
+  logsum_total ~ silicate_avg + silicate_avg_sq
+  percent_cover ~ silicate_avg + silicate_avg_sq
 '
 
 # create the df and tidy as necessary 
@@ -81,7 +82,10 @@ EnvData_wPocCoverV <- EnvData_wPocCover %>%
          percent_cover = as.numeric(percent_cover), 
          logsilicate_avg = log(silicate_avg+1),
          logsum_total = log(sum_total+1),
-         logpercent_cover = log(percent_cover+1)) %>%
+         logpercent_cover = log(percent_cover+1), 
+         percent_cover_sq = (percent_cover^2),
+         sum_total_sq = (sum_total^2), 
+         silicate_avg_sq = (silicate_avg^2)) %>%
   drop_na(silicate_avg, sum_total, percent_cover)
 
 ## fit and summarize the model 
@@ -94,13 +98,16 @@ summary(fitV, fit.measures = TRUE, standardized = TRUE)
 ##############################
 
 sem_modelC <- '
-  # Silicate_avg impacts recruits and percent_cover
+  # Silicate_avg impacts recruits and percent_cover (linear)
   logsum_total ~ silicate_avg
-  logpercent_cover ~ silicate_avg
+  percent_cover ~ silicate_avg
   
-  # Recruits impacts percent_cover
-  logpercent_cover ~ logsum_total
+  # Polynomial terms: recruits and percent_cover (quadratic)
+  logsum_total ~ percent_cover + percent_cover_sq
+  logsum_total ~ silicate_avg + silicate_avg_sq
+  percent_cover ~ silicate_avg + silicate_avg_sq
 '
+
 
 EnvData_wPocCoverC <- EnvData_wPocCover %>%
   filter(Location=="Cabral") %>% 
@@ -109,7 +116,10 @@ EnvData_wPocCoverC <- EnvData_wPocCover %>%
          percent_cover = as.numeric(percent_cover), 
          logsilicate_avg = log(silicate_avg+1),
          logsum_total = log(sum_total+1),
-         logpercent_cover = log(percent_cover+1)) %>%
+         logpercent_cover = log(percent_cover+1), 
+         percent_cover_sq = (percent_cover^2),
+         sum_total_sq = (sum_total^2), 
+         silicate_avg_sq = (silicate_avg^2)) %>%
   drop_na(silicate_avg, sum_total, percent_cover)
 
 
@@ -120,7 +130,6 @@ summary(fitC, fit.measures = TRUE, standardized = TRUE)
 
 
 ```
-
 
 ## Visualize results and assess the model fit 
 
