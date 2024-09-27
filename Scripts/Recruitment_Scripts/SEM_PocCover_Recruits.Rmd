@@ -83,9 +83,9 @@ EnvData_wPocCoverV <- EnvData_wPocCover %>%
          logsilicate_avg = log(silicate_avg+1),
          logsum_total = log(sum_total+1),
          logpercent_cover = log(percent_cover+1), 
-         percent_cover_sq = (percent_cover^2),
-         sum_total_sq = (sum_total^2), 
-         silicate_avg_sq = (silicate_avg^2)) %>%
+         percent_cover_sq = (logpercent_cover^2),
+         sum_total_sq = (logsum_total^2), 
+         silicate_avg_sq = (logsilicate_avg^2)) %>%
   drop_na(silicate_avg, sum_total, percent_cover)
 
 ## fit and summarize the model 
@@ -117,9 +117,9 @@ EnvData_wPocCoverC <- EnvData_wPocCover %>%
          logsilicate_avg = log(silicate_avg+1),
          logsum_total = log(sum_total+1),
          logpercent_cover = log(percent_cover+1), 
-         percent_cover_sq = (percent_cover^2),
-         sum_total_sq = (sum_total^2), 
-         silicate_avg_sq = (silicate_avg^2)) %>%
+         percent_cover_sq = (logpercent_cover^2),
+         sum_total_sq = (logsum_total^2), 
+         silicate_avg_sq = (logsilicate_avg^2)) %>%
   drop_na(silicate_avg, sum_total, percent_cover)
 
 
