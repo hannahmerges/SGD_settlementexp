@@ -134,7 +134,8 @@ ggplot(EnvData_wPocCoverV,
        aes(x = silicate_avg, 
            y = log(percent_cover+1))) +
   geom_point() +
-  geom_smooth(method = "lm") +
+  geom_smooth(method=lm, 
+              formula="y~poly(x,2)") +
   labs(title = "Relationship between SGD and Percent Cover")
 
 
@@ -142,7 +143,8 @@ ggplot(EnvData_wPocCoverV,
        aes(x = log(percent_cover+1) , 
            y = log(sum_total+1))) +
   geom_point() +
-  geom_smooth(method = "lm") +
+  geom_smooth(method=lm, 
+              formula="y~poly(x,2)") +
   labs(title = "Relationship between POC Cover and Recruits")
 
 
@@ -157,7 +159,8 @@ ggplot(EnvData_wPocCoverC,
        aes(x = silicate_avg, 
            y = log(percent_cover+1))) +
   geom_point() +
-  geom_smooth(method = "lm") +
+  geom_smooth(method=lm, 
+              formula="y~poly(x,2)") +
   labs(title = "Relationship between SGD and Percent Cover")
 
 
@@ -165,7 +168,8 @@ ggplot(EnvData_wPocCoverC,
        aes(x = log(percent_cover+1) , 
            y = log(sum_total+1))) +
   geom_point() +
-  geom_smooth(method = "lm") +
+  geom_smooth(method=lm, 
+              formula="y~poly(x,2)") +
   labs(title = "Relationship between POC Cover and Recruits")
 
 
