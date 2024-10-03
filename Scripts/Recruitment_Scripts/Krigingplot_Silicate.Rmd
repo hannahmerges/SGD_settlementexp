@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
+## Load libraries and read in data 
 ```{r}
 ### Maps of all parameters over time ####
 ### Nyssa Silbiger ####
@@ -72,8 +72,94 @@ CabralBaseMap<-get_map(MeanGPS %>%
 
 ```
 
+## Make kriging plot with maps for just silicate 
+
+```{r}
+### Make a spatial kriging file with polygon layers ####
+### Bring in the polygons for the sites
+#Varari
+V_kml <- getKMLcoordinates(kmlfile=here("Data","Varari_Polygon.kml"), ignoreAltitude=T)
+#Cabral
+C_kml <- getKMLcoordinates(kmlfile=here("Data","Cabral_Polygon.kml"), ignoreAltitude=T)
+
+
+# Pivot data to long form (if needed)
+nData <- nutrients %>%
+  pivot_longer(cols = 5:19, names_to = "Parameters", values_to = "Values")
+
+# Kriging function for a single parameter
+Krig_function <- function(dat_in = data, Lat = "lat", Lon = "lon", Param = "Values", poly) {
+  
+  dat <- dat_in[, c(Lon, Lat, Param)]
+  names(dat) <- c('Lon', 'Lat', 'Param')
+  
+  dat <- dat %>%
+    drop_na()
+  
+  x <- dat$Lon
+  y <- dat$Lat
+  z <- dat$Param
+  
+  # Perform kriging
+  krig1 <- kriging(x, y, z, pixels = 500, polygons = poly, lags = 3)  # Adjust pixels as needed
+  krig2 <- krig1$map
+  
+  return(krig2)
+}
+
+# Safely handle missing values without breaking the code
+Krig_function_safe <- safely(Krig_function)
+
+# Plot map function
+V_krig_map <- function(datakrig = preds) {
+  
+  ggmap(VarariBaseMap) +
+    geom_point(data = datakrig, aes(x = x, y = y, colour = pred), size = 4, alpha = 0.5) +
+    scale_color_viridis_c(" ", option = "plasma") +
+    coord_sf() +
+    theme(axis.line = element_blank(),
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks = element_blank(),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          panel.grid.major = element_line(color = 'white', linetype = "dashed", size = 0.5),
+          plot.background = element_rect(fill = 'white')) +
+    ggtitle("Varari Kriging")
+}
+
+# Kriging for a single parameter (e.g., Silicate_umolL)
+Varari_kriging <- nData %>%
+  filter(Location == "Varari") %>%
+  filter(CowTagID != "VSEEP") %>%  # Exclude VSEEP
+  filter(Parameters == 'Silicate_umolL') %>%  # Select only one parameter
+  droplevels() %>%
+  mutate(preds = Krig_function_safe(dat_in = ., poly = V_kml)) %>%  # Run kriging for the selected parameter
+  mutate(plots = map(preds, ~ggmap(VarariBaseMap) +
+                        geom_point(data = .x$result, aes(x = x, y = y, colour = pred), size = 4, alpha = 0.5) +
+                        geom_point(data = SiteGPS %>% filter(Location == 'Varari'), aes(x = lon, y = lat)) +
+                        scale_color_viridis_c(" ", option = "plasma") +
+                        coord_sf() +
+                        theme(axis.line = element_blank(),
+                              axis.text.x = element_blank(),
+                              axis.text.y = element_blank(),
+                              axis.ticks = element_blank(),
+                              axis.title.x = element_blank(),
+                              axis.title.y = element_blank(),
+                              panel.grid.major = element_line(color = 'white', linetype = "dashed", size = 0.5),
+                              plot.background = element_rect(fill = 'white')) +
+                        ggtitle("Varari: Silicate_umolL")))
+
+
+```
+
+
+
+
+
 
 ## Spatial Kriging Map 
+- commented out most of Danielle's code because only need singluar kriging plot for silicate variable 
 
 ```{r}
 ### Make a spatial kriging file with polygon layers ####

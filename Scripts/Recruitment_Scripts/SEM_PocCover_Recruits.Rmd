@@ -20,7 +20,9 @@ library(tidyverse)
 library(lmerTest)
 library(lme4)
 library(nlme)
+library(piecewiseSEM)
 library(GGally)
+library(mgcv)
 ```
 
 ## Read in Data 
@@ -31,158 +33,352 @@ EnvData_wPocCover <- read_csv(here::here("Data", "EnvData_wPocCover.csv"))
 ```
 
 
-## What is a structural equation model? 
+# What is a structural equation model? 
 -  It integrates a number of different multivariate techniques into one model fitting framework. 
 -  Numerous independent and dependent variables all affecting each other. More of a _system_ than regression organization. 
--  Indirect effects and direct effects 
--  There are certain shapes and arrows that describe the variables and their relationships to one another 
--  UCLA [page](https://stats.oarc.ucla.edu/r/seminars/rsem/)
+-  You can test indirect effects and direct effects. Essentially you specify individual models but bring them all together in a sem and it overlays all the models and runs it at once/together. 
+-  There are certain shapes and arrows that describe the variables and their relationships to one another (in piecewise SEM, these are called paths)
+-  cannot get a normal chi square to test goodness of fit for piecewise (can in traditional SEMs) but for piecewise you calculate d-separation
 
--  **Steps:** 1) specify the model. You can use the lavaan package to write the model syntax. You can have multiple explanatory variables (denoted with a "=~") and one response variable (denoted with just a '~'). 2) Then determine the model fit. The output gives you the summary of the estimated model. 3) visualize model and causal relationships between variables using pathSEM package. 
+-  Helpful links: 
+-  [UCLA page](https://stats.oarc.ucla.edu/r/seminars/rsem/)
+-  [Piecewise and Lavaan SEM](https://jslefche.github.io/sem_book/composite-variables.html)
+-  ["But I would wager that, more often that not, y is not directly a function of x . Rather, y may be affected by a host of direct and indirect factors, which themselves affect one another directly and indirectly"](https://jonlefcheck.net/2014/07/06/piecewise-structural-equation-modeling-in-ecological-research/)
+-  'unites two or more structural models to model multivariate relationships,’ in the words of Jim Grace
+-   "I might hypothesize that Y is directly influenced by both X1 and X2 , as in the first example above. Alternately, I might suspect that X1 indirectly affects Y through X2" --> in the case of my research, settlement is directly influenced by both SGD (x2) and percent coral cover (x1) and that percent cover indirectly affects settlement through SGD. 
 
+-  **Steps:** 
+-  1) specify the model. You can use the lavaan or piecewise package to write the model syntax. **In Lavaan:** You can have multiple explanatory variables (denoted with a "=~") and one response variable (denoted with just a '~'). **In Piecewise:** Write normal models as you would with lm/lmer and then bring them all toder with psem()
+-  2) Then determine the model fit. The output gives you the summary of the estimated model. 
+-  3) visualize model and causal relationships between variables using pathSEM package. 
+-  4) interpreting results: If P > 0.05, then the model represents the data well, and no paths are missing.
 
-## Models based on hypotheses
+## Models based on hypotheses and create dfs to use for SEM
+-  Want direct effect of silicate on recruits 
+-  Want indirect effect of percent cover on recruits **mediated** by silicate 
+
 ```{r}
+#### simplfy and edit dataframe to only what is necessary here
 
- poc_cover <- lm(percent_cover ~ silicate_avg + poly(log(sum_total+1), 2), data=EnvData_wPocCover)
-recruits <- lm(log(sum_total+1) ~ silicate_avg + poly(percent_cover,2), data=EnvData_wPocCover)
-
-
-qqp(resid(poc_cover),"norm") 
-qqp(resid(recruits),"norm")
-```
-
-
-## Structural equation model for recruitment tiles and Poc cover 
-- Separate Varari and Cabral  
-
-```{r}
-##############################
-## Varari 
-##############################
-
-## create the sem model, needed to remove reciprocal relationsship/path of sumtotal ~ percentcover because it was breaking the information matrix in lavaaan 
-
-sem_modelV <- '
-  # Silicate_avg impacts recruits and percent_cover (linear)
-  logsum_total ~ silicate_avg
-  percent_cover ~ silicate_avg
-  
-  # Polynomial terms: recruits and percent_cover (quadratic)
-  logsum_total ~ percent_cover + percent_cover_sq
-  logsum_total ~ silicate_avg + silicate_avg_sq
-  percent_cover ~ silicate_avg + silicate_avg_sq
-'
-
-# create the df and tidy as necessary 
-EnvData_wPocCoverV <- EnvData_wPocCover %>%
+###################################################
+# create the df and tidy as necessary - for Varari  
+###################################################
+EnvData_wPocCover_Varari <- EnvData_wPocCover %>%
   filter(Location=="Varari") %>% 
   mutate(silicate_avg = as.numeric(silicate_avg),
          sum_total = as.numeric(sum_total),
          percent_cover = as.numeric(percent_cover), 
          logsilicate_avg = log(silicate_avg+1),
          logsum_total = log(sum_total+1),
-         logpercent_cover = log(percent_cover+1), 
-         percent_cover_sq = (logpercent_cover^2),
-         sum_total_sq = (logsum_total^2), 
-         silicate_avg_sq = (logsilicate_avg^2)) %>%
-  drop_na(silicate_avg, sum_total, percent_cover)
+         logpercent_cover = log(percent_cover+1)) %>% 
+  dplyr::select(-c("ammonia_avg":"total_count_biotics", "sum_total_dead":"NN_avg")) %>% 
+  dplyr::rename(SGD = silicate_avg, 
+                Cover = logpercent_cover, 
+                Settlers = logsum_total)
 
-## fit and summarize the model 
-fitV <- sem(sem_modelV, data = EnvData_wPocCoverV)
-summary(fitV, fit.measures = TRUE, standardized = TRUE)
+###################################################
+# create the df and tidy as necessary - for Cabral  
+###################################################
 
-
-##############################
-## Cabral 
-##############################
-
-sem_modelC <- '
-  # Silicate_avg impacts recruits and percent_cover (linear)
-  logsum_total ~ silicate_avg
-  percent_cover ~ silicate_avg
-  
-  # Polynomial terms: recruits and percent_cover (quadratic)
-  logsum_total ~ percent_cover + percent_cover_sq
-  logsum_total ~ silicate_avg + silicate_avg_sq
-  percent_cover ~ silicate_avg + silicate_avg_sq
-'
-
-
-EnvData_wPocCoverC <- EnvData_wPocCover %>%
+EnvData_wPocCover_Cabral <- EnvData_wPocCover %>%
   filter(Location=="Cabral") %>% 
   mutate(silicate_avg = as.numeric(silicate_avg),
          sum_total = as.numeric(sum_total),
          percent_cover = as.numeric(percent_cover), 
          logsilicate_avg = log(silicate_avg+1),
          logsum_total = log(sum_total+1),
-         logpercent_cover = log(percent_cover+1), 
-         percent_cover_sq = (logpercent_cover^2),
-         sum_total_sq = (logsum_total^2), 
-         silicate_avg_sq = (logsilicate_avg^2)) %>%
-  drop_na(silicate_avg, sum_total, percent_cover)
+         logpercent_cover = log(percent_cover+1)) %>% 
+  dplyr::select(-c("ammonia_avg":"total_count_biotics", "sum_total_dead":"NN_avg")) %>% 
+  dplyr::rename(SGD = silicate_avg, 
+                Cover = logpercent_cover, 
+                Settlers = logsum_total)
+
+#####################################
+## direct effects of silicate 
+#####################################
+recruits_V <- lm(Settlers ~ SGD + I(SGD^2) + Cover + I(Cover^2), data=EnvData_wPocCover_Varari)
+anova(recruits_V)
+
+recruits_C <- lm(Settlers ~ SGD + I(SGD^2) + Cover + I(Cover^2), data=EnvData_wPocCover_Cabral)
+anova(recruits_C)
+
+#####################################
+## indirect effects 
+#####################################
+poc_cover_V <- lm(Cover ~ SGD, data=EnvData_wPocCover_Varari)
+anova(poc_cover_V)
+
+poc_cover_C <- lm(Cover ~ SGD, data=EnvData_wPocCover_Cabral)
+anova(poc_cover_C)
+
+### normality is good for all of them, once logged 
+qqp(resid(recruits_V),"norm") 
+qqp(resid(recruits_C),"norm")
+qqp(resid(poc_cover_V),"norm")
+qqp(resid(poc_cover_C),"norm")
+```
+
+## SEM 
+-  using piecewise rather than lavaan because it handles smaller sample sizes better and handles non-normal data and polynomial terms
+- "I have run into issues where tests of d-separation cannot be run because the model is ‘fully identified,’ aka there are no missing paths. In such a model, all variables are causally dependent. One can, however, calculate an AIC value for these models." from [Jon Lefcheck](https://jonlefcheck.net/2014/07/06/piecewise-structural-equation-modeling-in-ecological-research/)
+
+- **RESULTS:** Varari settlement is mainly described by the percent cover, though SGD does not seem to mediate that much of the percent cover at Varari. At Cabral, however, both SGD and percent cover dictate the settlement, but again SGD does not seem to strongly predict percent cover. 
+-  Additionally, quadratic terms currently do not fit in the model (as of October 3rd, 2024)
+
+```{r}
+################################
+## Varari SEM 
+################################
+
+# Create SEM using `psem`-- trying with non-quadratic terms first 
+Varari_modelList <- psem(
+  lm(Settlers ~ SGD + Cover, EnvData_wPocCover_Varari),
+  lm(Cover ~ SGD, EnvData_wPocCover_Varari),
+  EnvData_wPocCover_Varari)
+
+# Run summary
+summary(Varari_modelList)
+coefs(Varari_modelList)
+
+# evaluate the tests of directed separation
+#dSep(psem_Vrecruits) doesn't work because the model is perfect fit with no unidentified paths 
+#fisherC(psem_Vrecruits2)
+
+plot(Varari_modelList) ## shows the std.estimates --> which compares relative strength of predictors? -- so higher is better? So percent cover predicts settlment most strongly? 
+
+Varari_SEMplot <- plot(Varari_modelList, 
+                       node_attrs = list(shape = "circle", 
+                                         color = "black",
+                                         fillcolor = "firebrick3"))
+
+Varari_SEMplot
+
+#########################
+## now try with quadratic term 
+
+# Create SEM using `psem`-- trying with non-quadratic terms first 
+#Varari_modelList_quadratics <- psem(
+ # lm(logsum_total ~ silicate_avg + I(silicate_avg^2) + logpercent_cover + I(logpercent_cover^2), EnvData_wPocCover_Varari),
+ # lm(logpercent_cover ~ silicate_avg + I(silicate_avg^2), EnvData_wPocCover_Varari),
+ # EnvData_wPocCover_Varari)
+
+# Run summary
+#summary(Varari_modelList_quadratics)
+#coefs(Varari_modelList)
+
+####### DOESN'T WORK WITH QUADRATICS ############
 
 
-fitC <- sem(sem_modelC, data = EnvData_wPocCoverC)
-summary(fitC, fit.measures = TRUE, standardized = TRUE)
+```
+
+
+## For Cabral
+```{r}
+################################
+## Cabral SEM 
+################################
+
+# Create SEM using `psem`-- trying with non-quadratic terms first 
+Cabral_modelList <- psem(
+  lm(Settlers ~ SGD + Cover, EnvData_wPocCover_Cabral),
+  lm(Cover ~ SGD, EnvData_wPocCover_Cabral),
+  EnvData_wPocCover_Cabral)
+
+# Run summary
+summary(Cabral_modelList)
+
+# evaluate the tests of directed separation
+#dSep(psem_Vrecruits)
+#fisherC(psem_Vrecruits2)
+
+plot(Cabral_modelList)
+
+Cabral_SEMplot <- plot(Cabral_modelList, 
+                       node_attrs = list(shape = "circle", 
+                                         color = "black",
+                                         fillcolor = "goldenrod")) 
+Cabral_SEMplot
+
+
+
+```
+
+
+
+
+
+
+
+CAN IGNORE: EXTRA/OLD CODE 
+################################################
+################################################
+
+
+#### Extra: 
+```{r, echo=FALSE, message=FALSE}
+#################################################
+## Construct the piecewise SEM for Varari 
+#################################################
+#psem_Vrecruits <- psem(lm(logsum_total ~ silicate_avg + logpercent_cover, data=EnvData_wPocCover_Varari), 
+                    #   lm(logpercent_cover ~ silicate_avg, data=EnvData_wPocCover_Varari))
+
+#psem_Vrecruits2 <- psem(poc_cover_V, 
+                   #    recruits_V)
+
+
+
+# View the piecewise SEM
+#psem_Vrecruits2
+
+# Return the submodels
+#basisSet(psem_Vrecruits)
+
+
+
+# view summary 
+#summary(lm(logsum_total ~ silicate_avg + logpercent_cover, data = EnvData_wPocCover_Varari))$coefficients[3, ]
+
+```
+
+
+
+#### Structural equation model for recruitment tiles and Poc cover 
+- Separate Varari and Cabral  
+
+```{r, echo=FALSE, message=FALSE}
+##############################
+## Varari 
+##############################
+
+## create the sem model, needed to remove reciprocal relationsship/path of sumtotal ~ percentcover because it was breaking the information matrix in lavaaan 
+
+#sem_modelV <- '
+  # Polynomial terms: recruits and percent_cover (quadratic)
+#  logsum_total ~ percent_cover + percent_cover_sq
+ # logsum_total ~ silicate_avg + silicate_avg_sq
+ # percent_cover ~ silicate_avg + silicate_avg_sq
+#'
+
+# create the df and tidy as necessary 
+#EnvData_wPocCoverV <- EnvData_wPocCover %>%
+ # filter(Location=="Varari") %>% 
+ # mutate(silicate_avg = as.numeric(silicate_avg),
+      #   sum_total = as.numeric(sum_total),
+       #  percent_cover = as.numeric(percent_cover), 
+       #  logsilicate_avg = log(silicate_avg+1),
+       #  logsum_total = log(sum_total+1),
+       #  logpercent_cover = log(percent_cover+1), 
+        # percent_cover_sq = (logpercent_cover^2),
+     #    sum_total_sq = (logsum_total^2), 
+      #   silicate_avg_sq = (logsilicate_avg^2)) %>%
+ # drop_na(silicate_avg, sum_total, percent_cover)
+
+## fit and summarize the model 
+#fitV <- sem(sem_modelV, data = EnvData_wPocCoverV)
+#summary(fitV, fit.measures = TRUE, standardized = TRUE)
+
+
+##############################
+## Cabral 
+##############################
+
+#sem_modelC <- '
+#  # Polynomial terms: recruits and percent_cover (quadratic)
+#  logsum_total ~ percent_cover + percent_cover_sq
+ # logsum_total ~ silicate_avg + silicate_avg_sq
+ # percent_cover ~ silicate_avg + silicate_avg_sq
+#'
+
+
+#EnvData_wPocCoverC <- EnvData_wPocCover %>%
+ # filter(Location=="Cabral") %>% 
+ # mutate(silicate_avg = as.numeric(silicate_avg),
+     #    sum_total = as.numeric(sum_total),
+       #  percent_cover = as.numeric(percent_cover), 
+       #  logsilicate_avg = log(silicate_avg+1),
+      #   logsum_total = log(sum_total+1),
+      #  logpercent_cover = log(percent_cover+1), 
+       #  percent_cover_sq = (logpercent_cover^2),
+       #  sum_total_sq = (logsum_total^2), 
+       #  silicate_avg_sq = (logsilicate_avg^2)) %>%
+  #drop_na(silicate_avg, sum_total, percent_cover)
+
+
+#fitC <- sem(sem_modelC, 
+           # data = EnvData_wPocCoverC, 
+        #    se="bootstrap", 
+       #     bootstrap=1000)
+#summary(fitC, fit.measures = TRUE, standardized = TRUE, ci=TRUE)
 
 
 
 
 ```
 
-## Visualize results and assess the model fit 
+#### Visualize results and assess the model fit 
 
-```{r}
+```{r, echo=FALSE, message=FALSE}
 
 #############################
 ## Varari 
 #############################
 
-ggplot(EnvData_wPocCoverV, 
-       aes(x = silicate_avg, 
-           y = log(percent_cover+1))) +
-  geom_point() +
-  geom_smooth(method=lm, 
-              formula="y~poly(x,2)") +
-  labs(title = "Relationship between SGD and Percent Cover")
+#ggplot(EnvData_wPocCoverV, 
+  #     aes(x = silicate_avg, 
+    #       y = log(percent_cover+1))) +
+ # geom_point() +
+ # geom_smooth(method=lm, 
+    #          formula="y~poly(x,2)") +
+ # labs(title = "Relationship between SGD and Percent Cover")
 
 
-ggplot(EnvData_wPocCoverV, 
-       aes(x = log(percent_cover+1) , 
-           y = log(sum_total+1))) +
-  geom_point() +
-  geom_smooth(method=lm, 
-              formula="y~poly(x,2)") +
-  labs(title = "Relationship between POC Cover and Recruits")
+#ggplot(EnvData_wPocCoverV, 
+#       aes(x = log(percent_cover+1) , 
+#           y = log(sum_total+1))) +
+#  geom_point() +
+ # geom_smooth(method=lm, 
+ #  #           formula="y~poly(x,2)") +
+#  labs(title = "Relationship between POC Cover and Recruits")
 
 
-fitMeasures(fitV, c("rmsea", "cfi", "srmr"))
+#fitMeasures(fitV, c("rmsea", "cfi", "srmr"))
 
 
 #############################
 ## Cabral 
 #############################
 
-ggplot(EnvData_wPocCoverC, 
-       aes(x = silicate_avg, 
-           y = log(percent_cover+1))) +
-  geom_point() +
-  geom_smooth(method=lm, 
-              formula="y~poly(x,2)") +
-  labs(title = "Relationship between SGD and Percent Cover")
+#ggplot(EnvData_wPocCoverC, 
+ #      aes(x = silicate_avg, 
+  #         y = log(percent_cover+1))) +
+ # geom_point() +
+ # geom_smooth(method=lm, 
+   #           formula="y~poly(x,2)") +
+  #labs(title = "Relationship between SGD and Percent Cover")
 
 
-ggplot(EnvData_wPocCoverC, 
-       aes(x = log(percent_cover+1) , 
-           y = log(sum_total+1))) +
-  geom_point() +
-  geom_smooth(method=lm, 
-              formula="y~poly(x,2)") +
-  labs(title = "Relationship between POC Cover and Recruits")
+#ggplot(EnvData_wPocCoverC, 
+      # aes(x = log(percent_cover+1) , 
+        #   y = log(sum_total+1))) +
+ # geom_point() +
+ # geom_smooth(method=lm, 
+     #         formula="y~poly(x,2)") +
+ # labs(title = "Relationship between POC Cover and Recruits")
 
 
-fitMeasures(fitC, c("rmsea", "cfi", "srmr"))
+#fitMeasures(fitC, c("rmsea", "cfi", "srmr"))
+
+#ggplot(EnvData_wPocCoverC, 
+    #   aes(x = silicate_avg, 
+     #      y = log(sum_total+1))) +
+#  geom_point() +
+ # geom_smooth(method=lm, 
+          #    formula="y~poly(x,2)") +
+#  labs(title = "Relationship between POC Cover and Recruits")
+
+
+#fitMeasures(fitC, c("rmsea", "cfi", "srmr"))
+
 
 
 
