@@ -1,0 +1,881 @@
+---
+title: "Settler_Survivorship"
+author: "Hannah Merges"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Goal: To assess and analyze the survivorship of settlers on the tiles 
+- **Things to note:** _Pocillopora_ is a weedy, R-selected spp, with a type III survivorship curve. Meaning they release high numbers of offspring but with low probability of surviving to adulthood (Carlson et al. 2024). 
+ 
+-  pulled code from prelim analysis script, last updated in May 2024 
+
+# What is survival analysis? 
+-  The analysis of data on the time to occurrence of a specific event of interest
+-  I may not have the exact point of death for the settlers, but I know the start time it was 0 and then end time was 6 months and have mortality counts out of total population 
+-  Can integrate "censored" data - which are data on subjects whose times-to-event are not known either because they left the study before it ended or because monitoring terminated before their events has occurred. 
+-  Kaplan-Meier method is common way to estimate survival curves to include censored data 
+-  However, Kaplan-Meier assumes no replicates and all values are EITHER 0 or 1. Same with logistic regression. So another way to test would be using a beta regression which handles proportion data BETWEEN 0 and 1. 
+
+#### Load libraries 
+```{r, echo=FALSE, message=FALSE}
+library(patchwork)
+library(tidyverse)
+library(here)
+library(PNWColors)
+library(agricolae)
+library(lme4)
+library(lmerTest)
+library(modelsummary)
+library(performance)
+library(purrr)
+library(nlstools)
+library(stringr)
+library(emmeans)
+library(modelr)
+library(survival)
+library(betareg)
+library(statmod)
+library(ggsurvfit)
+library(survminer)
+```
+
+#### Read in data 
+
+```{r, echo=FALSE, message=FALSE}
+EnvData_wPocCover <- read_csv(here::here("Data", "EnvData_wPocCover.csv"))
+## FULL dataset with pocillopora cover data, env data (nuts, etc), and recruitment counts 
+
+```
+
+## Calculate proportion of alive recruits 
+```{r}
+EnvData_wPocCover2 <- EnvData_wPocCover %>% 
+  dplyr::select(!c("sal_max":"total_count_biotics")) %>% 
+  mutate(log_alive = log(sum_total_alive+1), 
+         log_total = log(sum_total+1),
+         proportion_alive = sum_total_alive/sum_total, 
+         proportion_alive_log = log_alive/log_total)
+```
+
+## Kaplan-Meier curve 
+- Helpful [Link](https://www.emilyzabor.com/tutorials/survival_analysis_in_r_tutorial.html)
+```{r}
+EnvData_wPocCover3 <- EnvData_wPocCover2 %>% 
+  dplyr::select(!c("sal_avg":"NN_avg", "ammonia_avg")) #%>% 
+#  mutate(kaplanmeier_survival = )
+
+EnvData_wPocCover3 <- EnvData_wPocCover3 %>% 
+  filter(CowTagID!="C19")
+
+EnvData_wPocCover3_Varari <- EnvData_wPocCover3 %>% 
+  filter(Location=="Varari")
+
+EnvData_wPocCover3_Cabral <- EnvData_wPocCover3 %>% 
+  filter(Location=="Cabral")
+
+## need to figure out how to appropriately edit the dataset
+
+km_survival_V <- Surv(EnvData_wPocCover3_Varari$silicate_avg, EnvData_wPocCover3_Varari$proportion_alive_log)
+
+km_survival_fit_V <- survfit(Surv(silicate_avg, proportion_alive_log) ~ 1, data = EnvData_wPocCover3_Varari)
+str(km_survival_fit_V)
+summary(km_survival_fit_V)
+
+km_survival_plot_V <- survfit2(Surv(silicate_avg, proportion_alive_log) ~ 1, data = EnvData_wPocCover3_Varari) %>% 
+  ggsurvfit() +
+  labs(
+    x = "Silicate",
+    y = "Overall survival probability")
+
+km_survival_plot_V
+
+
+## cabral 
+
+km_survival_C <- Surv(EnvData_wPocCover3_Cabral$silicate_avg, EnvData_wPocCover3_Cabral$proportion_alive_log)
+
+km_survival_fit_C <- survfit(Surv(silicate_avg, proportion_alive_log) ~ 1, data = EnvData_wPocCover3_Cabral)
+str(km_survival_fit_C)
+
+summary(km_survival_fit_C)
+
+
+km_survival_plot_C <- survfit2(Surv(silicate_avg, proportion_alive_log) ~ 1, data = EnvData_wPocCover3_Cabral) %>% 
+  ggsurvfit() +
+  labs(
+    x = "Silicate",
+    y = "Overall survival probability")
+
+km_survival_plot_C
+
+#####################################################
+#####################################################
+
+### found example code online from the analysis of biological data textbook 
+
+ebolaSurv <- Surv(time = ebola$time, event = ebola$outcome)
+ebolaKM <- survfit(ebolaSurv ~ 1, data = ebola, type="kaplan-meier") 
+
+#################
+## Cabral
+#################
+km_survival_C2 <- Surv(time = EnvData_wPocCover3_Cabral2$silicate_avg, event = EnvData_wPocCover3_Cabral2$proportion_alive)
+km_survival_fit_C2 <- survfit(km_survival_C2 ~ 1, data = EnvData_wPocCover3_Cabral2, type ="kaplan-meier")
+
+
+km_survival_plot_C2 <- ggsurvplot(km_survival_fit_C2, conf.int = TRUE, pval = FALSE, risk.table = FALSE, 
+  legend = "none", censor.shape = "|", censor.size = 4, palette = c("firebrick"), 
+  ylab = "Proportion surviving", xlab = "Silicate")
+
+km_survival_plot_C2
+
+summary(km_survival_fit_C2)
+
+```
+
+## GLM approach 
+-  get survivorship proportions and then use logistic or beta regression 
+-  **NOTE:** get rid of one tile that had zero settlers so doesn't skew the data (C19)
+-  Helpful [link](https://tysonbarrett.com/Rstats/chapter-5-generalized-linear-models.html)
+
+## Logistic regressions
+-  mostly updated from October 10th, 2024 
+```{r}
+### set up logistic regression model 
+
+logregres_model_C <- glm(proportion_alive ~ silicate_avg, family = quasibinomial(link="logit"), data=EnvData_wPocCover3_Cabral)
+logregres_model_V <- glm(proportion_alive ~ silicate_avg, family = quasibinomial(link="logit"), data=EnvData_wPocCover3_Varari)
+
+summary(logregres_model_C)
+
+########## 
+## add total count as a covariate 
+logregres_model_C2 <- glm(proportion_alive ~ silicate_avg + sum_total, family = quasibinomial(link="logit"), data=EnvData_wPocCover3_Cabral)
+summary(logregres_model_C2)
+
+logregres_model_V2 <- glm(proportion_alive ~ silicate_avg + sum_total, family = quasibinomial(link="logit"), data=EnvData_wPocCover3_Varari)
+summary(logregres_model_V2)
+
+##############################
+### October 10th meeting notes 
+##############################
+
+#### boxplot showing proportional survivorship at Varari vs Cabral 
+
+boxplot_survivorship <- EnvData_wPocCover3 %>% 
+  ggplot(aes(x=Location, 
+             y=proportion_alive)) +
+  geom_boxplot() + 
+  geom_jitter()
+
+boxplot_survivorship ## this shows that there are some differences between site at least in the mean proportion 
+
+##### show silicate on x instead and facet by Location 
+survivorship_wsilicate <- EnvData_wPocCover3 %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=proportion_alive)) +
+  geom_point() + 
+  facet_wrap(~Location)
+
+boxplot_survivorship_wsilicate
+
+##### come back to this plot 
+##### second hypothesis in the story - survivorship (first two hypotheses are settlement)
+survivorship_comparison <- EnvData_wPocCover3 %>% 
+  filter(proportion_alive>0) %>% 
+  ggplot(aes(x=log(sum_total+1), 
+             y=proportion_alive)) +
+  geom_point() + 
+  geom_smooth(method="lm") +
+  facet_wrap(~Location)
+
+survivorship_comparison
+
+###############
+### don't separate by site 
+
+survivorship_comparison_nofacet <- EnvData_wPocCover3 %>% 
+  filter(proportion_alive>0) %>% ## remove the 0s because skewing the data and only a few recruits on the plates with 0 anyway 
+  ggplot(aes(x=log(sum_total+1), 
+             y=proportion_alive)) +
+  geom_point() + 
+  geom_smooth(method="lm") 
+
+survivorship_comparison_nofacet
+
+
+###### include both sites in the model 
+survivorship_nosites <- lm(proportion_alive ~ log(sum_total+1), data =EnvData_wPocCover3 %>% 
+                             filter(proportion_alive>0))
+
+anova(survivorship_nosites)
+summary(survivorship_nosites) ## report R squared too in results 
+
+#### calculate residuals 
+
+resid(survivorship_nosites)
+
+resid_nositedf <- EnvData_wPocCover3 %>% 
+                              filter(proportion_alive>0) %>% 
+  bind_cols(resid_nosite = resid(survivorship_nosites)) 
+
+#### plot the residuals (this basically says that whatever points are above the best fit line are surviving more than expected due to density dependence because of SGD, anything below the line is surviving less than expected due to SGD)
+
+survivorship_comparison_nofacet2 <- resid_nositedf %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=resid_nosite)) +
+  geom_point(aes(color=Location)) 
+
+survivorship_comparison_nofacet2
+
+
+########### this is the same process as above, just separated by site 
+## create model to get residuals and test if silicate also impacts survival 
+
+survival_silciate_reg_C <- lm(proportion_alive ~ log(sum_total+1), data = EnvData_wPocCover3_Cabral %>% 
+                              filter(proportion_alive>0))
+
+anova(survival_silciate_reg_C)
+
+### Cabral residuals 
+resid_C <- resid(survival_silciate_reg_C)
+
+joinedC <- EnvData_wPocCover3_Cabral %>% 
+                              filter(proportion_alive>0) %>% 
+  bind_cols(residC = resid_C) 
+
+#### Varari model and residuals 
+survival_silciate_reg_V <- lm(proportion_alive ~ log(sum_total+1), data = EnvData_wPocCover3_Varari %>% 
+                              filter(proportion_alive>0))
+
+anova(survival_silciate_reg_V)
+resid_V <- resid(survival_silciate_reg_V)
+
+joinedV <- EnvData_wPocCover3_Varari %>% 
+                              filter(proportion_alive>0) %>% 
+  bind_cols(residV = resid_V) 
+
+############
+## plot each site 
+
+## cabral 
+residuals_plotted_C <- joinedC %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=residC)) +
+  geom_point() #+ 
+ # geom_smooth(method="lm") 
+
+residuals_plotted_C
+
+## varari 
+residuals_plotted_V <- joinedV %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=abs(residV))) +
+  geom_point() 
+
+residuals_plotted_V
+
+############################################
+############################################
+anova(logregres_model) ## anova doesn't mean anything with glms -- only works with general linear models not generalizED 
+check_model(logregres_model) ## not the best in terms of normality, but already logged ?? and not better when silicate is logged 
+plot(logregres_model)
+
+logregres_model2 <- glm(proportion_alive_log ~ silicate_avg, family = quasibinomial(link="logit"), data=EnvData_wPocCover3)
+
+
+###################
+## look at total alive instead of proportion 
+
+totalalive_V <- EnvData_wPocCover3_Varari %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=log(sum_total_alive+1))) +
+  geom_point() 
+
+totalalive_V
+
+totalalive_C <- EnvData_wPocCover3_Cabral %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=log(sum_total_alive+1))) +
+  geom_point() 
+
+totalalive_C
+
+```
+
+## Beta regressions 
+```{r}
+### set up beta regression (which deals with data that is confined to a lower and upper bound)
+
+beta_model_C <- betareg(proportion_alive ~ silicate_avg, data=EnvData_wPocCover3_Cabral)
+summary(beta_model_C)
+
+beta_model_V <- betareg(proportion_alive ~ silicate_avg, data=EnvData_wPocCover3_Varari)
+summary(beta_model_V)
+
+####################
+####################
+
+####################
+## take arc sine of sqrt of a number --  really common for proportion data because gets away from bounds of 0 and 1 
+####################
+
+########################################
+## need to edit the df so between 0 and 1, not including 
+########################################
+EnvData_wPocCover3_Cabral2 <- EnvData_wPocCover3_Cabral %>% 
+  mutate(proportion_alive2 = ifelse(proportion_alive == 0, proportion_alive + 0.0001,
+                             ifelse(proportion_alive == 1, proportion_alive - 0.0001, proportion_alive)),
+         arcsine_prop_transf = asin(sqrt(proportion_alive2)), 
+          arcsine_prop_transf2 = ifelse(arcsine_prop_transf > 1, arcsine_prop_transf - 0.6, arcsine_prop_transf))
+
+EnvData_wPocCover3_Varari2 <- EnvData_wPocCover3_Varari %>% 
+  mutate(proportion_alive2 = ifelse(proportion_alive == 0, proportion_alive + 0.0001,
+                             ifelse(proportion_alive == 1, proportion_alive - 0.0001, proportion_alive)), 
+         arcsine_prop_transf = asin(sqrt(proportion_alive2)),
+         arcsine_prop_transf2 = ifelse(arcsine_prop_transf > 1, arcsine_prop_transf - 0.6, arcsine_prop_transf))
+
+########################################
+#### try with specifying log link in the beta family 
+########################################
+
+beta_model2_C <- betareg(proportion_alive2 ~ silicate_avg, data=EnvData_wPocCover3_Cabral2, link="log")
+summary(beta_model2_C)
+
+beta_model2_V <- betareg(proportion_alive2 ~ silicate_avg, data=EnvData_wPocCover3_Varari2, link="log") 
+summary(beta_model2_V)
+
+############################################################
+# try with arcsine sqrt transformation of the proportion data 
+############################################################
+beta_model3_C <- betareg(arcsine_prop_transf2 ~ silicate_avg, data=EnvData_wPocCover3_Cabral2, link="log")
+summary(beta_model2_C)
+check_model(beta_model3_C)
+plot(beta_model3_C)
+
+beta_model3_V <- betareg(arcsine_prop_transf2 ~ silicate_avg, data=EnvData_wPocCover3_Varari2, link="log") 
+summary(beta_model2_V)
+
+
+########################################
+### try to plot! 
+########################################
+
+beta_reg_plot_C <- EnvData_wPocCover3_Cabral2 %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=proportion_alive_log)) + 
+  geom_point(size = 4) + 
+  geom_line(aes(y=predict(beta_model2_C,EnvData_wPocCover3_Cabral)), color="gray", linewidth=2) + 
+  theme_bw() 
+
+beta_reg_plot_C
+
+
+beta_reg_plot_V <- EnvData_wPocCover3_Varari2 %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=arcsine_prop_transf2)) + 
+  geom_point(size = 4) + 
+  geom_line(aes(y=predict(beta_model3_V,EnvData_wPocCover3_Varari)), color="gray", linewidth=2) + 
+  theme_bw() + 
+  labs(x = expression(Silicate~(mu*mol~L^-1)), 
+       y = "Proportion of Live Settlers")
+
+beta_reg_plot_V
+
+## add together 
+beta_reg_plot_V + beta_reg_plot_C
+```
+
+
+#### try beta regression with all forms of silicate (mean, max, min, CV)
+-  RESULTS: min silicate seems to be the best fit for Varari. All models fit poorly for Cabral 
+
+```{r}
+
+########################################
+### make new dataframe that includes just all the silicate measurements 
+########################################
+BetaReg_allSilicates <- EnvData_wPocCover %>% 
+  filter(CowTagID!="C19") %>% 
+  dplyr::select(!c("sal_avg":"NN_avg", "ammonia_avg":"NN_max","ammonia_max":"NN_min","ammonia_min":"NN_CV","ammonia_CV":"NN_sd","ammonia_sd":"total_count_biotics")) %>% 
+  mutate(log_alive = log(sum_total_alive+1), 
+         log_total = log(sum_total+1),
+         proportion_alive = sum_total_alive/sum_total, 
+         proportion_alive_log = log_alive/log_total, 
+         proportion_alive2 = ifelse(proportion_alive == 0, proportion_alive + 0.001,
+                             ifelse(proportion_alive == 1, proportion_alive - 0.0001, proportion_alive)),
+         arcsine_prop_transf = asin(sqrt(proportion_alive2)), 
+         arcsine_prop_transf2 = ifelse(arcsine_prop_transf > 1, arcsine_prop_transf - 0.6, arcsine_prop_transf))
+
+
+########################################
+## make beta reg models 
+########################################
+
+### NOTES: RAW PROPORTIONS FIT BETTER THAN ARC SINE SQ RT 
+
+##############
+## min silicate 
+##############
+
+## Varari 
+betamodel_minSiO3_V <- betareg(proportion_alive2 ~ silicate_min, data=BetaReg_allSilicates %>% 
+                               filter(Location=="Varari"), link="log") 
+summary(betamodel_minSiO3_V)
+
+## Cabral 
+### NOTE: WARNING THAT THERE IS NO VALID STARTING VALUE, DEFAULTS TO 1, REALLY BAD FIT 
+betamodel_minSiO3_C <- betareg(proportion_alive2 ~ silicate_min, data=BetaReg_allSilicates %>% 
+                               filter(Location=="Cabral"), link="log") 
+summary(betamodel_minSiO3_C)
+
+
+##############
+## max silicate 
+##############
+
+## Varari 
+betamodel_maxSiO3_V <- betareg(proportion_alive2 ~ silicate_max, data=BetaReg_allSilicates %>% 
+                               filter(Location=="Varari"), link="log") 
+summary(betamodel_maxSiO3_V)
+
+## Cabral 
+### NOTE: WARNING THAT THERE IS NO VALID STARTING VALUE, DEFAULTS TO 1, REALLY BAD FIT 
+betamodel_maxSiO3_C <- betareg(proportion_alive2 ~ silicate_max, data=BetaReg_allSilicates %>% 
+                               filter(Location=="Cabral"), link="log") 
+summary(betamodel_maxSiO3_C)
+
+##############
+## avg silicate 
+##############
+
+## Varari 
+betamodel_avgSiO3_V <- betareg(proportion_alive2 ~ silicate_avg, data=BetaReg_allSilicates %>% 
+                               filter(Location=="Varari"), link="log") 
+summary(betamodel_avgSiO3_V)
+
+## Cabral 
+### NOTE: WARNING THAT THERE IS NO VALID STARTING VALUE, DEFAULTS TO 1, REALLY BAD FIT 
+betamodel_avgSiO3_C <- betareg(proportion_alive2 ~ silicate_avg, data=BetaReg_allSilicates %>% 
+                               filter(Location=="Cabral"), link="log") 
+summary(betamodel_avgSiO3_C)
+
+##############
+## CV silicate 
+##############
+
+## Varari 
+betamodel_CVSiO3_V <- betareg(proportion_alive2 ~ silicate_CV, data=BetaReg_allSilicates %>% 
+                               filter(Location=="Varari"), link="log") 
+summary(betamodel_CVSiO3_V)
+
+## Cabral 
+### NOTE: WARNING THAT THERE IS NO VALID STARTING VALUE, DEFAULTS TO 1, REALLY BAD FIT 
+betamodel_CVSiO3_C <- betareg(proportion_alive2 ~ silicate_CV, data=BetaReg_allSilicates %>% 
+                               filter(Location=="Cabral"), link="log") 
+summary(betamodel_CVSiO3_C)
+
+```
+
+
+
+
+
+
+
+
+
+
+# BELOW IS OLD CODE!! 
+
+## Start by plotting just visual breakdown of alive vs dead per tile
+```{r, echo=FALSE, message=FALSE}
+dead_alive_counts <- EnvData_wPocCover %>%
+  pivot_longer(cols = sum_total_alive:sum_total_dead, names_to = "Dead_Alive", values_to = "Total") %>% 
+  dplyr::select(!c("sal_max":"total_count_biotics"))
+  
+###########
+## plot Cabral ratios
+
+live_dead_plotC <- dead_alive_counts %>% 
+  filter(Location=="Cabral") %>% 
+  ggplot(aes(x=factor(CowTagID, level = c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14", "C15", "C16", "C17", "C18", "C19", "C20", "CSEEP")), 
+             y=Total, 
+             fill=Dead_Alive)) + 
+  geom_bar(stat="identity") +  ### if want them side:side, need to include position = "dodge"
+  scale_fill_manual(values=c("coral2", "darkgray"), 
+                    guide="none") + 
+  labs(x="Cabral CowTag IDs") 
+
+live_dead_plotC
+
+###########
+## plot Varari ratios
+
+live_dead_plotV <- dead_alive_counts %>% 
+  filter(Location=="Varari") %>% 
+  ggplot(aes(x=factor(CowTagID, level = c("V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11", "V12", "V13", "V14", "V15", "V16", "V17", "V18", "V19", "V20", "VSEEP")), 
+             y=Total, 
+             fill=Dead_Alive)) + 
+  geom_bar(stat="identity") + 
+  scale_fill_manual(values=c("coral2", "darkgray"), 
+                    guide="none") + 
+  labs(x="Varari CowTag IDs")
+
+live_dead_plotV
+
+```
+
+
+### alive vs dead patterns as a response to silicate 
+- doesn't seem to be any significant pattern, although Varari is clearly way stronger nonlinear relationship 
+
+```{r, echo=FALSE, message=FALSE}
+
+###############################
+## Cabral
+###############################
+
+Silicate_dead_C <- dead_alive_counts %>% 
+  filter(Location=="Cabral", 
+         silicate_avg < 40) %>%
+  ggplot(aes(x=silicate_avg, 
+             y=log(Total+1), 
+             color=Dead_Alive)) + 
+  geom_point(size=4) + 
+  geom_smooth(method= lm, 
+             # formula="y~poly(x,2)",
+              fill="cornsilk3",
+              alpha=0.3) + 
+  scale_color_manual(values=c("coral2", "darkgray"), 
+                    guide="none") + 
+   labs(x="Cabral Silicate") + 
+  theme_bw()
+
+Silicate_dead_C
+
+###############################
+## Varari
+###############################
+  
+Silicate_dead_V <- dead_alive_counts %>% 
+  filter(Location=="Varari", 
+         silicate_avg < 40) %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=log(Total+1), 
+             color=Dead_Alive)) + 
+  geom_point(size=4) + 
+  geom_smooth(method= lm, 
+              formula="y~poly(x,2)",
+              fill="cornsilk3",
+             alpha=0.3) +
+  scale_color_manual(values=c("coral2", "darkgray"), 
+                    guide="none") + 
+  labs(x="Varari Silicate") + 
+  theme_classic()
+
+Silicate_dead_V
+
+
+```
+
+
+## Plot proportion of alive by silicate 
+-  based off of just visuals, appears that there is a u-shaped curve at Varari and Cabral kind of slowly deteriorates as silicate increases 
+-  actually the same proportions at ~3 umol silicate 
+-  what could be causing this? algae? flow? competition? 
+```{r, echo=FALSE, message=FALSE}
+
+###############################
+## Cabral
+###############################
+
+prop_alive_C <- EnvData_wPocCover2 %>% 
+  filter(Location=="Cabral", 
+         silicate_avg < 40) %>%
+  ggplot(aes(x=silicate_avg, 
+             y=proportion_log)) + 
+  geom_point(size=4) + 
+  geom_smooth(method= lm, 
+              formula="y~poly(x,2)",
+              fill="cornsilk3",
+              alpha=0.3) + 
+  scale_color_manual(values=c("coral2", "darkgray"), 
+                    guide="none") + 
+   labs(x="Cabral Silicate") + 
+  theme_bw()
+
+prop_alive_C
+
+###############################
+## Varari
+###############################
+  
+prop_alive_V <- EnvData_wPocCover2 %>% 
+  filter(Location=="Varari", 
+         silicate_avg < 40) %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=proportion_log)) + 
+  geom_point(size=4) + 
+  geom_smooth(method= lm, 
+              formula="y~poly(x,2)",
+              fill="cornsilk3",
+             alpha=0.3) +
+  scale_color_manual(values=c("coral2", "darkgray"), 
+                    guide="none") + 
+  labs(x="Varari Silicate") + 
+  theme_classic()
+
+prop_alive_V
+
+
+prop_alive_V + prop_alive_C
+
+```
+
+
+### COME BACK TO BELOW PARTS 
+
+### plot the dead vs alive as scatterplot with 0 slope 
+### then also calculate the actual slope and residuals using *regression* model and see how compares to a 0 slope 
+```{r, echo=FALSE, message=FALSE}
+### color by silicate 
+
+Dead_Alive_Scatter_slope1 <- EnvData_wPocCover2 %>% 
+  filter(silicate_avg < 40) %>% 
+  ggplot(aes(y=log(sum_total_alive+1), 
+             x=log(sum_total_dead+1), 
+             color=silicate_avg)) + 
+  geom_point(size=4) + 
+  scale_color_viridis() +
+  geom_abline(slope = 1, intercept=0) +
+ # geom_abline(slope = 1.086, intercept=0, linetype=2) + 
+#  geom_ribbon(aes(ymin=1.086-0.2147, ymax=1.086+0.2147)) + FIGURE OUT HOW TO GET SE BARS 
+  facet_wrap(~Location) 
+  
+Dead_Alive_Scatter_slope1
+ggsave(here("Outputs","RecruitmentTiles", "Dead_Alive_Scatter_slope1.jpg"), 
+       width=10, height=8)
+
+################################
+### should separate by site though because Cabral and Varari are different 
+################################
+CommComp_recruit_envdata2_Cabral <- CommComp_recruit_envdata2 %>% 
+  filter(Location=="Cabral") %>% 
+  mutate(log_alive=log(sum_total_alive+1), 
+         log_dead=log(sum_total_dead+1))
+
+CommComp_recruit_envdata2_Varari <- CommComp_recruit_envdata2 %>% 
+  filter(Location=="Varari") %>% 
+  mutate(log_alive=log(sum_total_alive+1), 
+         log_dead=log(sum_total_dead+1))
+
+################################
+## calculate the slope and regression and residuals and plot of all those things 
+################################
+## model 
+dead_alive_model_Cabral <- lm(log_alive~ log_dead, data=CommComp_recruit_envdata2_Cabral)
+## ^ make sure that alive is first, because not it is switched to be on the y-axis bc easier to visualize values 
+
+dead_alive_model_Cabral ### gives you new intercept and slope 
+anova(dead_alive_model_Cabral)
+summary(dead_alive_model_Cabral)
+
+####################
+dead_alive_model_Varari <- lm(log_alive ~ log_dead, data=CommComp_recruit_envdata2_Varari)
+
+dead_alive_model_Varari
+anova(dead_alive_model_Varari) 
+summary(dead_alive_model_Varari)
+
+
+#############################
+## run a model with both sites just to prove that there is a difference by site 
+#############################
+dead_alive_model_bothsites <- lm(log(sum_total_alive+1) ~ log(sum_total_dead+1)*Location, data=CommComp_recruit_envdata2)
+
+anova(dead_alive_model_bothsites) ### IF LOGGED: due to density dependence there is NO significant relationship --> big diff in intercepts 
+summary(dead_alive_model_bothsites)
+plot(dead_alive_model_bothsites)
+dead_alive_model_bothsites ## gives you the slope and intercept if you just type it out 
+
+### BUT if do NOT log the data 
+dead_alive_model_bothsites_nolog <- lm(sum_total_alive ~ sum_total_dead*Location, data=CommComp_recruit_envdata2)
+
+anova(dead_alive_model_bothsites_nolog) ### IF NOT logged: STRONG significant relationship --> big diff in intercepts 
+summary(dead_alive_model_bothsites_nolog)
+plot(dead_alive_model_bothsites_nolog)
+dead_alive_model_bothsites_nolog
+
+```
+
+#### plot as independent sites with regular slope of 1 and calculated slope 
+```{r, echo=FALSE, message=FALSE}
+########## 
+Cabral_DeadAlive <- CommComp_recruit_envdata2_Cabral %>% 
+  filter(silicate_avg < 40) %>% 
+  ggplot(aes(y=log_alive, 
+             x=log_dead, 
+             color=silicate_avg)) + 
+  geom_point(size=4) + 
+  scale_color_viridis() +
+  geom_abline(slope = 1, intercept=0) +
+ geom_abline(slope = 0.7420, intercept=0, linetype=2) + 
+  labs(title="Cabral")
+#  geom_ribbon(aes(ymin=1.086-0.2147, ymax=1.086+0.2147)) + FIGURE OUT HOW TO GET SE BARS 
+ # facet_wrap(~Location) 
+Cabral_DeadAlive
+
+ggsave(here("Outputs","RecruitmentTiles", "Cabral_DeadAlive_slopes.jpg"), 
+       width=10, height=8)
+
+#############
+Varari_DeadAlive <- CommComp_recruit_envdata2_Varari %>% 
+  filter(silicate_avg < 40) %>% 
+  ggplot(aes(y=log_alive, 
+             x=log_dead, 
+             color=silicate_avg)) + 
+  geom_point(size=4) + 
+  scale_color_viridis(guide="none") +
+  geom_abline(slope = 1, intercept=0) +
+ geom_abline(slope = 0.6563, intercept=0, linetype=2) + 
+  labs(title="Varari")
+  
+#  geom_ribbon(aes(ymin=1.086-0.2147, ymax=1.086+0.2147)) + FIGURE OUT HOW TO GET SE BARS 
+ # facet_wrap(~Location) 
+Varari_DeadAlive
+
+ggsave(here("Outputs","RecruitmentTiles", "Varari_DeadAlive_slopes.jpg"), 
+       width=10, height=8)
+
+##################
+## compare both sites next to each other 
+
+Varari_DeadAlive + Cabral_DeadAlive
+ggsave(here("Outputs","RecruitmentTiles", "DeadAlive_slopes_bothsites.jpg"), 
+       width=10, height=8)
+
+
+```
+
+
+### calculate residuals  
+```{r, echo=FALSE, message=FALSE}
+### calculate the difference from 1:1 line and the raw data slope of 1.086 to calculate resids 
+## then take resid as response var and silicate on x axis 
+
+##################################
+##### not using this code below anymore because want to split per site BUT if want to use both sites together, can uncomment below. 
+################################### 
+#CommComp_recruit_envdata3 <- CommComp_recruit_envdata2 %>% 
+  #add_residuals(dead_alive_model) %>%  ## using the modelr package to compare to the actual calculations below 
+  #mutate(resids=((sum_total_dead)-(((1.086)*(sum_total_alive)) + (6.599))))  
+### YAY GOOD JOB HANNAH FOR UNDERSTANDING STATS AND FIGURING IT OUT WITHOUT ASKING QUESTIONS 
+
+##################################
+### residual = actual y - predicted y --> y= mx + b where m is slope, x is alive/dead recruits, and b is intercept from models 
+##################################
+####  RESIDUALS ARE CALCULATED USING LOG DATA FOR THESE DFS 
+
+### for Cabral 
+Cabral_resids_dataslope <- CommComp_recruit_envdata2_Cabral %>% 
+  mutate(resids=((log_alive)-((0.7420*log_alive) + 0))) ### use the slope calculated from the models 
+         
+Cabral_resids_slope1 <- CommComp_recruit_envdata2_Cabral %>% 
+  mutate(resids=((log_alive)-((1*log_alive) + 0))) #### THIS IS JUST 0 THEN -- ASK NYSSA 
+
+### for Varari 
+Varari_resids_dataslope <- CommComp_recruit_envdata2_Varari %>% 
+ mutate(resids=((log_alive)-((0.6563*log_alive) + 0)))
+
+Varari_resids_slope1 <- CommComp_recruit_envdata2_Varari %>% 
+  mutate(resids=((log_alive)-((1*log_alive) + 0)))
+
+```
+
+### plot residuals 
+```{r, echo=FALSE, message=FALSE}
+## and plot with slope from data 
+Dead_Alive_resid_Cabral <- Cabral_resids_dataslope %>% 
+  filter(silicate_avg < 40) %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=resids)) + 
+  geom_point(size=4) +
+  facet_wrap(~Location, scales="free") 
+
+Dead_Alive_resid_Cabral
+ggsave(here("Outputs","RecruitmentTiles", "DeadAlive_resids_Cabral.jpg"), 
+       width=10, height=8)
+
+##### with slope of 1
+Dead_Alive_resid_Cabral2 <- Cabral_resids_slope1 %>% 
+  filter(silicate_avg < 40) %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=resids)) + 
+  geom_point(size=4) +
+  facet_wrap(~Location, scales="free") 
+
+Dead_Alive_resid_Cabral2
+ggsave(here("Outputs","RecruitmentTiles", "DeadAlive_0resids_Cabral.jpg"), 
+       width=10, height=8)
+
+
+Dead_Alive_resid_Cabral2 + Dead_Alive_resid_Cabral
+ggsave(here("Outputs","RecruitmentTiles", "DeadAlive_Cabral_residscombined.jpg"), 
+       width=10, height=8)
+
+#########################
+### For Varari 
+#########################
+Dead_Alive_resid_Varari <- Varari_resids_dataslope %>% 
+  filter(silicate_avg < 40) %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=resids)) + 
+  geom_point(size=4) +
+  facet_wrap(~Location, scales="free") 
+
+Dead_Alive_resid_Varari
+ggsave(here("Outputs","RecruitmentTiles", "DeadAlive_resids_Varari.jpg"), 
+       width=10, height=8)
+
+#####
+Dead_Alive_resid_Varari2 <- Varari_resids_slope1 %>% 
+  filter(silicate_avg < 40) %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=resids)) + 
+  geom_point(size=4) +
+  facet_wrap(~Location, scales="free") 
+
+Dead_Alive_resid_Varari2
+ggsave(here("Outputs","RecruitmentTiles", "DeadAlive_resids0_Varari.jpg"), 
+       width=10, height=8)
+
+##############################
+## combine two sites with residuals based on data 
+##############################
+
+Dead_Alive_resid_Varari + Dead_Alive_resid_Cabral
+ggsave(here("Outputs","RecruitmentTiles", "DeadAlive_resids_bothsites.jpg"), 
+       width=10, height=8)
+
+```
+
+
+### run models on residuals 
+```{r, echo=FALSE, message=FALSE}
+############################
+## Varari resid models 
+############################
+
+V_resid_model1 <- lm(resids~silicate_avg, data=Varari_resids_dataslope)
+
+anova(V_resid_model1)
+
+```
+
+

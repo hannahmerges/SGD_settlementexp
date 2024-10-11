@@ -22,7 +22,9 @@ library(lme4)
 library(nlme)
 library(piecewiseSEM)
 library(GGally)
+library(emmeans)
 library(mgcv)
+library(semEff)
 ```
 
 ## Read in Data 
@@ -71,10 +73,10 @@ EnvData_wPocCover_Varari <- EnvData_wPocCover %>%
          logsilicate_avg = log(silicate_avg+1),
          logsum_total = log(sum_total+1),
          logpercent_cover = log(percent_cover+1)) %>% 
-  dplyr::select(-c("ammonia_avg":"total_count_biotics", "sum_total_dead":"NN_avg")) %>% 
-  dplyr::rename(SGD = silicate_avg, 
-                Cover = logpercent_cover, 
-                Settlers = logsum_total)
+  dplyr::select(-c("ammonia_avg":"total_count_biotics", "sum_total_dead":"NN_avg")) #%>% 
+ # dplyr::rename(SGD = silicate_avg, 
+            #    Cover = logpercent_cover, 
+            #    Settlers = logsum_total)
 
 ###################################################
 # create the df and tidy as necessary - for Cabral  
@@ -87,20 +89,37 @@ EnvData_wPocCover_Cabral <- EnvData_wPocCover %>%
          percent_cover = as.numeric(percent_cover), 
          logsilicate_avg = log(silicate_avg+1),
          logsum_total = log(sum_total+1),
-         logpercent_cover = log(percent_cover+1)) %>% 
+         logpercent_cover = log(percent_cover+1))# %>% 
   dplyr::select(-c("ammonia_avg":"total_count_biotics", "sum_total_dead":"NN_avg")) %>% 
-  dplyr::rename(SGD = silicate_avg, 
-                Cover = logpercent_cover, 
-                Settlers = logsum_total)
+  #dplyr::rename(SGD = silicate_avg, 
+            #    Cover = logpercent_cover, 
+              #  Settlers = logsum_total)
 
 #####################################
 ## direct effects of silicate 
 #####################################
 recruits_V <- lm(Settlers ~ SGD + I(SGD^2) + Cover + I(Cover^2), data=EnvData_wPocCover_Varari)
 anova(recruits_V)
+summary(recruits_V)
 
+## separate them so that they are not in same model because SGD and Cover are highly collinear 
+recruits_V_SGDonly <- lm(Settlers ~ SGD + I(SGD^2), data=EnvData_wPocCover_Varari)
+anova(recruits_V_SGDonly)
+
+recruits_V_Coveronly <- lm(Settlers ~ Cover + I(Cover^2), data=EnvData_wPocCover_Varari)
+anova(recruits_V_Coveronly)
+
+
+#######
 recruits_C <- lm(Settlers ~ SGD + I(SGD^2) + Cover + I(Cover^2), data=EnvData_wPocCover_Cabral)
 anova(recruits_C)
+
+recruits_C_SGDonly <- lm(Settlers ~ SGD + I(SGD^2), data=EnvData_wPocCover_Cabral)
+anova(recruits_C_SGDonly)
+
+recruits_C_Coveronly <- lm(Settlers ~ Cover + I(Cover^2), data=EnvData_wPocCover_Cabral)
+anova(recruits_C_Coveronly)
+
 
 #####################################
 ## indirect effects 
@@ -125,6 +144,7 @@ qqp(resid(poc_cover_C),"norm")
 - **RESULTS:** Varari settlement is mainly described by the percent cover, though SGD does not seem to mediate that much of the percent cover at Varari. At Cabral, however, both SGD and percent cover dictate the settlement, but again SGD does not seem to strongly predict percent cover. 
 -  Additionally, quadratic terms currently do not fit in the model (as of October 3rd, 2024)
 
+- For Varari 
 ```{r}
 ################################
 ## Varari SEM 
@@ -172,7 +192,7 @@ Varari_SEMplot
 ```
 
 
-## For Cabral
+- for Cabral 
 ```{r}
 ################################
 ## Cabral SEM 
@@ -202,6 +222,720 @@ Cabral_SEMplot
 
 
 ```
+
+
+## Edit SEM to add quadratic term via composite variable 
+-  quadratic terms fit in the model (Ocotber 4th, 2024) but the model is not a good fit 
+-  likely because was running SGD and Cover together - but highly covaried 
+
+```{r}
+###########################
+## for Varari 
+###########################
+
+recruits_V_SGD <- lm(Settlers ~ SGD + I(SGD^2), data=EnvData_wPocCover_Varari)
+recruits_V_Cover <- lm(Settlers ~ Cover + I(Cover^2), data=EnvData_wPocCover_Varari)
+
+poc_cover_V <- lm(Cover ~ SGD, data=EnvData_wPocCover_Varari)
+
+## get coefficients and use them to generate the factor scores - then use those scores to predict settlers
+
+#############
+## first for SGD 
+coeff_V_SGD <- summary(recruits_V_SGD)$coefficients[2, 1]
+
+coeff_V2_SGD <- summary(recruits_V_SGD)$coefficients[3, 1]
+
+SGDsq <- coeff_V_SGD * EnvData_wPocCover_Varari$SGD + coeff_V2_SGD * (EnvData_wPocCover_Varari$SGD)^2
+
+
+#############
+## next for Cover 
+
+coeff_V_Cover <- summary(recruits_V_Cover)$coefficients[2, 1]
+
+coeff_V2_Cover <- summary(recruits_V_Cover)$coefficients[3, 1]
+
+Coversq <- coeff_V_Cover * EnvData_wPocCover_Varari$Cover + coeff_V2_Cover * (EnvData_wPocCover_Varari$Cover)^2
+
+
+#############
+## summary of both composites 
+
+summary(lm(Settlers ~ SGDsq + Coversq, data = data.frame(EnvData_wPocCover_Varari, SGDsq, Coversq)))
+
+coefs(lm(Settlers ~ SGDsq + Coversq, data = data.frame(EnvData_wPocCover_Varari, SGDsq, Coversq)))
+
+#############
+## put into piecewise sem 
+
+Varari_modelList_polyterm <- psem(
+  lm(Cover ~ SGD, EnvData_wPocCover_Varari),
+  lm(Settlers ~ SGDsq + Coversq, data = data.frame(EnvData_wPocCover_Varari, SGDsq, Coversq)
+))
+
+summary(Varari_modelList_polyterm, .progressBar = FALSE)
+
+#############
+## plot 
+Varari_SEMplot_polyterm <- plot(Varari_modelList_polyterm, 
+                       node_attrs = list(shape = "circle", 
+                                         color = "black",
+                                         fillcolor = "firebrick3"))
+Varari_SEMplot_polyterm
+
+
+###########################
+## for Cabral 
+###########################
+
+recruits_C_SGD <- lm(Settlers ~ SGD + I(SGD^2), data=EnvData_wPocCover_Cabral)
+recruits_C_Cover <- lm(Settlers ~ Cover + I(Cover^2), data=EnvData_wPocCover_Cabral)
+
+poc_cover_C_Cover <- lm(Cover ~ SGD, data=EnvData_wPocCover_Cabral)
+
+
+## get coefficients and use them to generate the factor scores - then use those scores to predict settlers
+#############
+## first for SGD 
+coeff_C_SGD <- summary(recruits_C_SGD)$coefficients[2, 1]
+
+coeff_C2_SGD <- summary(recruits_C_SGD)$coefficients[3, 1]
+
+SGDsq <- coeff_C_SGD * EnvData_wPocCover_Cabral$SGD + coeff_C2_SGD * (EnvData_wPocCover_Cabral$SGD)^2
+
+
+#############
+## next for Cover 
+
+coeff_C_Cover <- summary(recruits_C_Cover)$coefficients[2, 1]
+
+coeff_C2_Cover <- summary(recruits_C_Cover)$coefficients[3, 1]
+
+Coversq <- coeff_C_Cover * EnvData_wPocCover_Cabral$Cover + coeff_C2_Cover * (EnvData_wPocCover_Cabral$Cover)^2
+
+
+#############
+## summary of both composites 
+
+summary(lm(Settlers ~ SGDsq + Coversq, data = data.frame(EnvData_wPocCover_Cabral, SGDsq, Coversq)))
+
+coefs(lm(Settlers ~ SGDsq + Coversq, data = data.frame(EnvData_wPocCover_Cabral, SGDsq, Coversq)))
+
+#############
+## put into piecewise sem 
+
+Cabral_modelList_polyterm <- psem(
+  lm(Cover ~ SGD, EnvData_wPocCover_Cabral),
+  lm(Settlers ~ SGDsq + Coversq, data = data.frame(EnvData_wPocCover_Cabral, SGDsq, Coversq)
+))
+
+summary(Cabral_modelList_polyterm, .progressBar = FALSE)
+
+
+#############
+## plot 
+Cabral_SEMplot_polyterm <- plot(Cabral_modelList_polyterm, 
+                       node_attrs = list(shape = "circle", 
+                                         color = "black",
+                                         fillcolor = "goldenrod"))
+Cabral_SEMplot_polyterm
+
+```
+
+
+## Run with a Poisson distribution 
+-  which means no logging, use glm instead of lm, and specify poisson distribution (or can try with lognormal)
+```{r}
+recruits_V_SGDonly_poisson <- glm((sum_total+1) ~ silicate_avg + I(silicate_avg^2), family = "poisson", data=EnvData_wPocCover_Varari)
+anova(recruits_V_SGDonly_poisson)
+check_model(recruits_V_SGDonly_poisson)
+
+recruits_V_Coveronly_poisson <- glm((sum_total+1) ~ (percent_cover+1) + I((percent_cover+1)^2), family = "poisson", data=EnvData_wPocCover_Varari)
+
+anova(recruits_V_Coveronly_poisson)
+check_model(recruits_V_Coveronly_poisson)
+
+
+recruits_C_SGDonly_poisson <- glm(sum_total+1 ~ silicate_avg + I(silicate_avg^2), family = "poisson", data=EnvData_wPocCover_Cabral)
+
+anova(recruits_C_SGDonly_poisson)
+check_model(recruits_C_SGDonly_poisson)
+
+recruits_C_Coveronly_poisson <- glm((sum_total+1) ~ (percent_cover+1) + I((percent_cover+1)^2), family = "poisson", data=EnvData_wPocCover_Cabral)
+
+anova(recruits_C_Coveronly_poisson)
+check_model(recruits_C_Coveronly_poisson)
+
+#####################################
+## indirect effects 
+#####################################
+poc_cover_V <- glm(percent_cover ~ silicate_avg, data=EnvData_wPocCover_Varari)
+anova(poc_cover_V)
+
+poc_cover_C <- lm(percent_cover ~ silicate_avg, data=EnvData_wPocCover_Cabral)
+anova(poc_cover_C)
+
+
+```
+
+
+## Try with negative binomial distribution 
+-  because with poisson distribution, variance was a bit overdispersed (meaning: the variance is larger than the mean)
+-  A negative binomial distribution is useful for: count data that is overdispersed (ie- with highly variable data), deals with aggregated data better
+-  However, it is not recommended to use with small sample sizes :/ 
+```{r}
+recruits_V_SGDonly_negbinom <- glm.nb((sum_total+1) ~ silicate_avg + I(silicate_avg^2), data=EnvData_wPocCover_Varari)
+
+anova(recruits_V_SGDonly_negbinom)
+check_model(recruits_V_SGDonly_negbinom)
+
+recruits_V_Coveronly_negbinom <- glm.nb((sum_total+1) ~ (percent_cover+1) + I((percent_cover+1)^2), data=EnvData_wPocCover_Varari)
+
+anova(recruits_V_Coveronly_negbinom)
+check_model(recruits_V_Coveronly_negbinom)
+
+
+recruits_C_SGDonly_negbinom <- glm.nb(sum_total+1 ~ silicate_avg + I(silicate_avg^2), data=EnvData_wPocCover_Cabral)
+
+anova(recruits_C_SGDonly_negbinom)
+check_model(recruits_C_SGDonly_negbinom)
+
+recruits_C_Coveronly_negbinom <- glm.nb((sum_total+1) ~ (percent_cover+1) + I((percent_cover+1)^2), data=EnvData_wPocCover_Cabral)
+
+anova(recruits_C_Coveronly_negbiom)
+check_model(recruits_C_Coveronly_negbiom)
+
+#####################################
+## indirect effects 
+#####################################
+poc_cover_V <- glm(percent_cover ~ silicate_avg, data=EnvData_wPocCover_Varari)
+anova(poc_cover_V)
+
+poc_cover_C <- lm(percent_cover ~ silicate_avg, data=EnvData_wPocCover_Cabral)
+anova(poc_cover_C)
+
+```
+
+
+## Edit negative binomial regression with quadratic term to incorporate new model and distributions 
+-  edited this section on October 10th, 2024 during meeting 
+
+```{r}
+###########################
+## October 10th meeting notes
+## trying individual negative binomials with SGD and percent cover since they are so highly correlated 
+###########################
+
+recruits_V_SGDandCover_negbinom <- glm.nb((sum_total+1) ~ (percent_cover+1)*Location , data=EnvData_wPocCover)
+
+recruits_V_SGDandCover_negbinom2 <- glm.nb((sum_total+1) ~ (silicate_avg + I(silicate_avg^2))*Location , data=EnvData_wPocCover)
+
+summary(recruits_V_SGDandCover_negbinom2)
+
+
+###########################
+## for Varari 
+###########################
+
+recruits_V_SGDonly_negbinom <- glm.nb((sum_total+1) ~ silicate_avg + I(silicate_avg^2), data=EnvData_wPocCover_Varari)
+recruits_V_Coveronly_negbinom <- glm.nb((sum_total+1) ~ (percent_cover+1) + I((percent_cover+1)^2), data=EnvData_wPocCover_Varari)
+
+## get coefficients and use them to generate the factor scores - then use those scores to predict settlers
+
+#############
+## first for SGD 
+coeff_V_SGD_negb <- summary(recruits_V_SGDonly_negbionom)$coefficients[2, 1]
+
+coeff_V2_SGD_negb <- summary(recruits_V_SGDonly_negbionom)$coefficients[3, 1]
+
+SGDsq_negb <- coeff_V_SGD_negb * EnvData_wPocCover_Varari$silicate_avg + coeff_V2_SGD_negb * (EnvData_wPocCover_Varari$silicate_avg)^2
+
+
+#############
+## next for Cover 
+
+coeff_V_Cover_negb <- summary(recruits_V_Coveronly_negbionom)$coefficients[2, 1]
+
+coeff_V2_Cover_negb <- summary(recruits_V_Coveronly_negbionom)$coefficients[3, 1]
+
+Coversq_negb <- coeff_V_Cover_negb * EnvData_wPocCover_Varari$percent_cover + coeff_V2_Cover_negb * (EnvData_wPocCover_Varari$percent_cover)^2
+
+
+#############
+## summary of both composites 
+
+summary(lm(sum_total ~ SGDsq_negb + Coversq_negb, data = data.frame(EnvData_wPocCover_Varari, SGDsq_negb, Coversq_negb)))
+
+coefs(lm(sum_total ~ SGDsq_negb + Coversq_negb, data = data.frame(EnvData_wPocCover_Varari, SGDsq_negb, Coversq_negb)))
+
+
+###########################
+## for Cabral 
+###########################
+
+## independent models first 
+recruits_C_SGDonly_negbinom <- glm.nb(sum_total+1 ~ silicate_avg + I(silicate_avg^2), data=EnvData_wPocCover_Cabral)
+recruits_C_Coveronly_negbinom <- glm.nb((sum_total+1) ~ (percent_cover+1) + I((percent_cover+1)^2), data=EnvData_wPocCover_Cabral)
+
+#############
+## get coefficients first for quadratic SGD 
+coeff_C_SGD_negb <- summary(recruits_C_SGDonly_negbinom)$coefficients[2, 1]
+
+coeff_C2_SGD_negb <- summary(recruits_C_SGDonly_negbinom)$coefficients[3, 1]
+
+SGDsq_negb_C <- coeff_C_SGD_negb * EnvData_wPocCover_Cabral$silicate_avg + coeff_C2_SGD_negb * (EnvData_wPocCover_Cabral$silicate_avg)^2
+
+
+#############
+## next for cover 
+
+coeff_C_Cover_negb <- summary(recruits_C_Coveronly_negbinom)$coefficients[2, 1]
+
+coeff_C2_Cover_negb <- summary(recruits_C_Coveronly_negbinom)$coefficients[3, 1]
+
+Coversq_negb_C <- coeff_C_Cover_negb * EnvData_wPocCover_Cabral$percent_cover + coeff_C2_Cover_negb * (EnvData_wPocCover_Cabral$percent_cover)^2
+
+
+#############
+## summary of both composites 
+## use to make model 
+
+neg_binomialreg_model_C <- lm(sum_total ~ SGDsq_negb_C + Coversq_negb_C, data = data.frame(EnvData_wPocCover_Cabral, SGDsq_negb_C, Coversq_negb_C))
+
+summary(neg_binomialreg_model_C)
+
+coefs(lm(sum_total ~ SGDsq_negb_C + Coversq_negb_C, data = data.frame(EnvData_wPocCover_Cabral, SGDsq_negb_C, Coversq_negb_C)))
+
+
+```
+
+
+
+
+## Try with SGD and Cover together with new neg. binomial distribution and then try separately 
+
+```{r}
+
+############################################################################
+### SEM with neg binomial distrib AND SGD with Cover 
+############################################################################
+
+
+#### Varari ##### 
+
+#############
+## put into piecewise sem 
+
+Varari_modelList_polyterm_negbinom <- psem(
+  lm(percent_cover ~ silicate_avg, EnvData_wPocCover_Varari),
+  lm(sum_total+1 ~ SGDsq_negb + Coversq_negb, data = data.frame(EnvData_wPocCover_Varari, SGDsq_negb, Coversq_negb)))
+
+summary(Varari_modelList_polyterm_negbinom, .progressBar = FALSE)
+
+#############
+## plot 
+Varari_SEMplot_polyterm_negbinom_together <- plot(Varari_modelList_polyterm_negbinom, 
+                       node_attrs = list(shape = "circle", 
+                                         color = "black",
+                                         fillcolor = "firebrick3"))
+Varari_SEMplot_polyterm_negbinom_together
+
+
+######################
+######################
+#### Cabral ##### 
+
+## put into piecewise sem 
+
+Cabral_modelList_polyterm_negbinom <- psem(
+  lm(percent_cover ~ silicate_avg, EnvData_wPocCover_Cabral),
+  lm(sum_total ~ SGDsq_negb_C + Coversq_negb_C, data = data.frame(EnvData_wPocCover_Cabral, SGDsq_negb_C, Coversq_negb_C)))
+
+summary(Cabral_modelList_polyterm_negbinom, .progressBar = FALSE)
+
+#############
+## plot 
+Cabral_SEMplot_polyterm_negbinom_together <- plot(Cabral_modelList_polyterm_negbinom, 
+                       node_attrs = list(shape = "circle", 
+                                         color = "black",
+                                         fillcolor = "goldenrod"))
+Cabral_SEMplot_polyterm_negbinom_together
+
+
+
+
+
+
+
+
+############################################################################
+### SEM with neg bionomial distrib BUT SGD with Cover SEPARATE
+############################################################################
+
+#############
+## put into piecewise sem 
+
+Varari_modelList_polyterm_negbinom2 <- psem(
+  lm(percent_cover ~ silicate_avg, EnvData_wPocCover_Varari),
+  glm.nb(sum_total ~ SGDsq_negb, data = data.frame(EnvData_wPocCover_Varari, SGDsq_negb)), 
+  lm(sum_total ~ Coversq_negb, data = data.frame(EnvData_wPocCover_Varari, Coversq_negb))) ## won't let me run separately 
+
+summary(Varari_modelList_polyterm_negbinom2, .progressBar = FALSE)
+
+
+
+```
+
+
+## Separate SGD and Cover into individual models, try with only linear percent cover term, and incorporate error into model 
+-  Section based on conversation via Slack with Nyssa (October 7th)
+```{r}
+
+### separating out SGD and Cover into two separate models
+recruits_V_SGDonly_negbinom <- glm.nb((sum_total+1) ~ silicate_avg + I(silicate_avg^2), data=EnvData_wPocCover_Varari)
+anova(recruits_V_SGDonly_negbinom)
+summary(recruits_V_SGDonly_negbinom)
+
+recruits_V_Coveronly_negbinom <- glm.nb((sum_total+1) ~ (percent_cover+1) + I((percent_cover+1)^2), data=EnvData_wPocCover_Varari)
+anova(recruits_V_Coveronly_negbinom)
+summary(recruits_V_Coveronly_negbinom)
+
+
+### bringing SGD and Cover back together but removing nonlinear percent cover term 
+
+recruits_V_model3 <-  glm.nb((sum_total+1) ~ silicate_avg + I(silicate_avg^2) + (percent_cover+1) , data=EnvData_wPocCover_Varari)
+anova(recruits_V_model3)
+summary(recruits_V_model3)
+
+# Calculate the correlation coefficient (using Pearson correlation by default)
+correlation_pearson <- cor(EnvData_wPocCover_Varari$silicate_avg, EnvData_wPocCover_Varari$percent_cover, method = "pearson")
+correlation_pearson
+
+# in case spearman is better 
+correlation_spearman <- cor(EnvData_wPocCover_Varari$silicate_avg, EnvData_wPocCover_Varari$percent_cover, method = "spearman")
+correlation_spearman
+
+
+### incorporate est error/correlation into SEM (adapted from https://jslefche.github.io/piecewiseSEM/reference/cerror.html)
+
+## just for Varari for rn
+
+## this is the original sem 
+Varari_modelList_polyterm_negbinom <- psem(
+  lm(sum_total ~ SGDsq_negb + Coversq_negb, data = data.frame(EnvData_wPocCover_Varari, SGDsq_negb, Coversq_negb)), 
+  lm(percent_cover ~ silicate_avg, EnvData_wPocCover_Varari))
+
+summary(Varari_modelList_polyterm_negbinom, .progressBar = FALSE)
+
+# Look at correlated error between silicate and cover (exogenous)
+sem_error <- cerror(SGDsq_negb %~~% Coversq_negb, Varari_modelList_polyterm_negbinom, data = data.frame(EnvData_wPocCover_Varari, SGDsq_negb, Coversq_negb))
+sem_error
+
+# Same as cor.test
+with(data = data.frame(EnvData_wPocCover_Varari, SGDsq_negb, Coversq_negb), cor.test(SGDsq_negb, Coversq_negb))
+
+
+# Look at correlated error between x1 and y1 (endogenous)
+sem_error2 <- cerror(sum_total %~~% SGDsq_negb, Varari_modelList_polyterm_negbinom, data = data.frame(EnvData_wPocCover_Varari, SGDsq_negb, Coversq_negb))
+
+# Not the same as cor.test (accounts for influence of x1 and x2 on y1)
+with(data = data.frame(EnvData_wPocCover_Varari, SGDsq_negb, Coversq_negb), cor.test(sum_total, SGDsq_negb))
+
+# Specify in psem
+updated_sem <- update(Varari_modelList_polyterm_negbinom, SGDsq_negb %~~% sum_total)
+
+coefs(updated_sem)
+summary(updated_sem, .progressBar = FALSE) ## same summary as the original model 
+
+
+
+## check in plot 
+updatedplot <- plot(updated_sem, 
+                       node_attrs = list(shape = "circle", 
+                                         color = "black",
+                                         fillcolor = "firebrick3"))
+updatedplot
+
+```
+
+
+## Might not use SEM, construct individual negative binomial models 
+-  Part 2 of conversation with Nyssa (October 7th)
+-  create models and plots with just regular negative binomial models 
+-  RESULT: for the model cover ~ SGD, signif, or no? YES, but _only_ for Varari in nonlinear term. NO for everything else 
+-  [Plotting negative binomials](https://stackoverflow.com/questions/76742036/how-to-make-a-plot-of-a-negative-binomial-regression-fitted-values-and-95-conf)
+
+#### Varari 
+```{r}
+#### try just cover ~ SGD to see what is significant 
+cover_SGD_signif <- lm(log(percent_cover+1) ~ silicate_avg, EnvData_wPocCover_Varari)
+
+anova(cover_SGD_signif)
+
+cover_SGD_signif2 <- lm(log(percent_cover+1) ~ silicate_avg + I(silicate_avg^2), EnvData_wPocCover_Varari)
+
+anova(cover_SGD_signif2)
+
+
+
+cover_SGD_signif_C <- lm(log(percent_cover+1) ~ silicate_avg, EnvData_wPocCover_Cabral)
+
+anova(cover_SGD_signif_C)
+
+
+cover_SGD_signif_C2 <- lm(log(percent_cover+1) ~ silicate_avg + I(silicate_avg^2), EnvData_wPocCover_Cabral)
+
+anova(cover_SGD_signif_C2)
+
+###########################################
+###### plot neg binomial model with SGD and recruits. And then separate one for cover and recruits ###########################################
+
+##############
+## strategy 1
+## from stack overflow 
+## currently has errors and not running (October 10th, 2024)
+##############
+
+### what is offset?? 
+nb.model1 <- MASS::glm.nb(sum_total ~ silicate_avg + offset(log(offset_1)), data=EnvData_wPocCover_Varari)
+summary(nb.model)
+predict(nb.model, type="response")/newdata$offset_1
+
+## generate predicted values / CIs
+
+## plot 
+
+
+##############
+## strategy 2
+##############
+## from youtube video 
+
+ggpredict(recruits_V_SGDonly_negbinom, terms = "log(sum_total + 1)", 
+          condition=c(silicate_avg=0))
+
+##############
+## strategy 3 
+## from chatgpt help 
+############## 
+
+# Create the negative binomial model for SGD
+recruits_V_SGDonly_negbinom <- glm.nb((sum_total + 1) ~ silicate_avg + I(silicate_avg^2), 
+                                      data = EnvData_wPocCover_Varari)
+
+# Get the estimated marginal means (predictions) using emmeans
+emmeans_results <- emmeans(recruits_V_SGDonly_negbinom, 
+                           ~ silicate_avg, 
+                           at = list(silicate_avg = seq(min(EnvData_wPocCover_Varari$silicate_avg), 
+                                                        max(EnvData_wPocCover_Varari$silicate_avg), 
+                                                        length.out = 100)))
+
+# Convert emmeans results to a dataframe
+emmeans_df <- as.data.frame(emmeans_results)
+
+# Plot the observed values, predicted values, and confidence intervals
+V_negbinomial_SGDplot <- ggplot() +
+  geom_point(data = EnvData_wPocCover_Varari,
+             aes(x = silicate_avg, y = sum_total + 1), 
+             color = "black", size = 2) +  # Observed data points
+  geom_line(data = emmeans_df, 
+            aes(x = silicate_avg, 
+                y=emmean), color = "red", linewidth = 1) +  # Fitted values
+  geom_ribbon(data = emmeans_df, 
+              aes(x = silicate_avg,
+                  ymin = asymp.LCL, 
+                  ymax = asymp.UCL), 
+              alpha = 0.2, fill = "grey") +  # Confidence intervals
+  labs(title = "Observed vs Predicted Negative Binomial Counts (Using emmeans)",
+       x = "Silicate Avg",
+       y = "Recruits") +
+  theme_minimal()
+
+V_negbinomial_SGDplot
+
+##############
+## strategy 4 
+## from https://stats.oarc.ucla.edu/r/dae/negative-binomial-regression/
+##############
+# Fit the negative binomial model for COVER
+recruits_V_Coveronly_negbinom <- glm.nb((sum_total+1) ~ (percent_cover+1), data=EnvData_wPocCover_Varari)
+
+# Create a dataframe with fitted values and confidence intervals
+predicted_data_2 <- EnvData_wPocCover_Varari %>%
+  mutate(fitted_values = predict(recruits_V_Coveronly_negbinom, type = "response"),
+         lower_ci = fitted_values - 1.96 * sqrt(fitted_values),  # Lower bound of CI ## APPARENTLY NOT GOOD FOR THIS BC ASSUMES SAME ERROR THROUGHOUT
+         upper_ci = fitted_values + 1.96 * sqrt(fitted_values))  # Upper bound of CI
+
+# Plot the observed counts and fitted values (predicted values)
+V_negbinomial_Coverplot <- predicted_data_2 %>% 
+  ggplot(aes(x = percent_cover, 
+             y = sum_total + 1)) +
+  geom_point(aes(y = sum_total + 1), color = "black", linewidth = 2) +  # Observed data
+  geom_line(aes(y = fitted_values), color = "red", linewidth = 1) +  # Fitted values from the model
+  geom_ribbon(aes(ymin = lower_ci, ymax = upper_ci), alpha = 0.2, color="grey") +  # Confidence intervals
+  labs(title = "Observed vs Predicted Negative Binomial Counts",
+       x = "Percent Cover",
+       y = "Recruits (Sum Total + 1)") +
+  theme_minimal()
+
+V_negbinomial_Coverplot
+```
+
+
+#### Cabral 
+
+```{r}
+### based on whatever strategy worked best for Varari 
+recruits_C_SGDonly_negbinom <- glm.nb(sum_total+1 ~ silicate_avg + I(silicate_avg^2), data=EnvData_wPocCover_Cabral)
+anova(recruits_C_SGDonly_negbinom)
+
+recruits_C_Coveronly_negbinom <- glm.nb((sum_total+1) ~ (percent_cover+1), data=EnvData_wPocCover_Cabral)
+
+anova(recruits_C_Coveronly_negbinom)
+
+```
+
+## Work flow from Ocotber 10th, 2024 meeting 
+```{r}
+
+## test the number of survivors (sum total alive) vs percent cover of P acuta 
+
+alive_by_cover <- EnvData_wPocCover %>% 
+  mutate(proportion = sum_total_alive/sum_total) %>% 
+  filter(sum_total_alive > 0) %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=log(sum_total_alive+1), 
+             color=Location)) + 
+  geom_point() + 
+  geom_smooth(method="lm")
+
+alive_by_cover
+
+### check Varari and Cabral together 
+
+bothsites <- EnvData_wPocCover %>% 
+  ggplot(aes(x= silicate_avg,
+             y=log(sum_total+1))) + 
+  geom_point() 
+
+bothsites
+
+### density dependence by site 
+
+
+
+```
+
+
+## Another attempt at SEM, switching order of variables 
+-  make adult percent cover the response variable and have a model that is percent_cover ~ recruits, and recruits ~ SGD +SGD^2
+-  calculate the **indirect** effect of SGD on coral cover as mediated by recruits using inspo [from](https://murphymv.github.io/semEff/articles/semEff.html)
+-  may need to add in percent cover ~ SGD + recruits ... but try without first
+-  The indirect effect is the pathway from an exogenous variable to an outcome through a mediator.
+-  _Exogenous_ = a predictor variable that only has arrows coming out of it, _Endogenous_ = a variable that is predicted in the network (a dependent var)
+
+```{r}
+##########################################
+## first try (again with Varari only)
+##########################################
+## make the models for the sem 
+
+V_coverresponse <- lm(log(percent_cover+1) ~ log(sum_total+1), data=EnvData_wPocCover_Varari)
+anova(V_coverresponse)
+
+V_recruitsSGD <- glm.nb((sum_total+1) ~ silicate_avg + I((silicate_avg+1)^2), data=EnvData_wPocCover_Varari)
+anova(V_recruitsSGD)
+
+Cover_mediatedbyrecruits <- lm(log(percent_cover+1) ~ silicate_avg +  log(sum_total+1), data=EnvData_wPocCover_Varari)
+anova(Cover_mediatedbyrecruits)
+
+
+## calc the coeff to use for second model here in the piecewise 
+V_recruitsSGD_coeffs <- summary(V_recruitsSGD)$coefficients[2, 1]
+
+V_recruitsSGD_coeffs2 <- summary(V_recruitsSGD)$coefficients[3, 1]
+
+SGD_sq <- V_recruitsSGD_coeffs * EnvData_wPocCover_Varari$silicate_avg + V_recruitsSGD_coeffs2 * (EnvData_wPocCover_Varari$silicate_avg)^2
+
+## now put into a piecewise sem
+V_newSEM <- psem(
+  lm(percent_cover+1 ~ log(sum_total+1), data=EnvData_wPocCover_Varari),
+  glm.nb(sum_total+1 ~ SGD_sq, data=data.frame(EnvData_wPocCover_Varari,SGD_sq)))
+  
+summary(V_newSEM, .progressBar = FALSE)
+
+#########################################
+## try different version of models 
+#########################################
+
+model1 <- lm(percent_cover ~ sum_total + SGD_sq, data=data.frame(EnvData_wPocCover_Varari,SGD_sq)) 
+check_model(model1)
+
+model2 <- glm.nb(sum_total ~ SGD_sq, data=data.frame(EnvData_wPocCover_Varari,SGD_sq))
+check_model(model2)
+
+model3 <- lm(sqrt(percent_cover+1) ~ silicate_avg + I(silicate_avg^2), data=data.frame(EnvData_wPocCover_Varari,SGD_sq)) 
+check_model(model3)
+anova(model3)
+
+
+#########################################
+## put everything into sem 
+#########################################
+V_newSEM_edit <- list(
+  lm(percent_cover ~ sum_total + SGD_sq, data=data.frame(EnvData_wPocCover_Varari,SGD_sq)),
+  glm.nb(sum_total ~ SGD_sq, data=data.frame(EnvData_wPocCover_Varari,SGD_sq)))
+
+## visualize the list 
+piecewiseSEM:::plot.psem(
+  piecewiseSEM::as.psem(V_newSEM_edit),
+  node_attrs = data.frame(shape = "rectangle", color = "black", fillcolor = "grey"),
+  layout = "tree"
+)
+
+V_newSEM_edit2 <- piecewiseSEM::as.psem(V_newSEM_edit)
+summary(V_newSEM_edit2)
+
+## for calculating effects: first bootstrap and save the standardised direct effects: 
+system.time(
+  V_newSEM_edit_boot <- bootEff(V_newSEM_edit, R = 100, seed = 13, parallel = "no")
+)
+
+(V_newSEM_edit_semEff <- semEff(V_newSEM_edit_boot))
+
+summary(V_newSEM_edit_semEff)
+
+```
+
+
+## checking range of raw data 
+```{r}
+View(EnvData_wPocCover_Varari)
+
+max(EnvData_wPocCover_Varari$sum_total)
+min(EnvData_wPocCover_Varari$sum_total)
+
+max(EnvData_wPocCover_Cabral$sum_total)
+min(EnvData_wPocCover_Cabral$sum_total)
+
+
+max(EnvData_wPocCover_Cabral$percent_cover)
+max(EnvData_wPocCover_Varari$percent_cover)
+
+mean(EnvData_wPocCover_Cabral$percent_cover)
+mean(EnvData_wPocCover_Varari$percent_cover)
+
+
+max(EnvData_wPocCover_Cabral$silicate_avg)
+max(EnvData_wPocCover_Varari$silicate_avg)
+
+mean(EnvData_wPocCover_Cabral$silicate_avg)
+mean(EnvData_wPocCover_Varari$silicate_avg)
+```
+
+
+
 
 
 

@@ -1,0 +1,224 @@
+---
+title: "Experiment_Analysis_Thesis"
+author: "Hannah Merges"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries 
+
+```{r, echo=FALSE, message=FALSE}
+library(patchwork)
+library(tidyverse)
+library(here)
+library(PNWColors)
+library(viridis)
+library(car)
+library(lubridate)
+library(lme4)
+library(lmerTest)
+library(modelsummary)
+library(tidymodels)
+library(flextable)
+library(performance)
+library(agricolae)
+library(broom)
+library(stringr)
+library(emmeans)
+library(MuMIn)
+```
+
+## Load datasets 
+
+```{r, echo=FALSE, message=FALSE}
+SettlementCount_updated <- read_csv(here::here("Data", "SettlementCounts_edited.csv"))
+
+SettlementCount_updated <- SettlementCount_updated %>% 
+  filter(settled!=0) #%>% ##dropped one outlier in data where there were 0 counts for everything, so I think no larvae were actually added
+```
+
+## Boxplot with jitter 
+
+```{r}
+boxplot_silic <- SettlementCount_updated %>%
+  ggplot(aes(x=silicate, 
+             y=settled, 
+             fill=site)) +
+  geom_boxplot() +
+  geom_jitter(aes(color=treatment_level)) +
+  facet_wrap(~site) + 
+  scale_fill_manual(values=c("lightgray", "lightgray")) + 
+  scale_color_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
+                    limits=c("Ambient", "Low", "Medium", "High")) +
+  theme_classic()
+
+
+boxplot_silic
+
+```
+
+
+## Violin plot 
+
+```{r}
+
+##########################
+## basic violin plot - silicate x 
+##########################
+
+violin1_silic <- SettlementCount_updated %>%
+  ggplot(aes(x=silicate, 
+             y=settled, 
+             fill=site)) +
+  geom_violin(width=1.4) +
+  #geom_boxplot(width=0.1, color="grey", alpha=0.2) +
+#  geom_jitter(aes(color=treatment_level)) +
+  facet_wrap(~site) + 
+ # scale_fill_manual(values=c("lightgray", "lightgray")) + 
+ # scale_color_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
+                   # limits=c("Ambient", "Low", "Medium", "High")) +
+  theme_classic()
+
+
+violin1_silic
+
+##########################
+## basic violin plot - treatment groups on x 
+##########################
+
+violin2_silic <- SettlementCount_updated %>%
+  ggplot(aes(x=treatment_level,
+             y=settled, 
+             fill=treatment_level)) +
+  geom_violin(width=1.4) +
+  #geom_boxplot(width=0.1, color="grey", alpha=0.2) +
+#  geom_jitter(aes(color=treatment_level)) +
+  facet_wrap(~site) + 
+ # scale_fill_manual(values=c("lightgray", "lightgray")) + 
+  scale_fill_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
+                    limits=c("Ambient", "Low", "Medium", "High")) +
+  scale_x_discrete(limits=c("Ambient", "Low", "Medium", "High")) +
+  theme_classic()
+
+violin2_silic
+
+
+##########################
+## violin plot with boxplot - treatment groups on x 
+##########################
+
+violin3_silic <- SettlementCount_updated %>%
+  ggplot(aes(x=treatment_level, 
+             y=settled, 
+             fill=treatment_level)) +
+  geom_violin(width=1.4) +
+  geom_boxplot(width=0.4, color="black", alpha=0.2) +
+  #geom_jitter(aes(color="black")) +
+  facet_wrap(~site) + 
+ # scale_fill_manual(values=c("lightgray", "lightgray")) + 
+  scale_fill_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
+                    limits=c("Ambient", "Low", "Medium", "High")) +
+  scale_x_discrete(limits=c("Ambient", "Low", "Medium", "High")) +
+  theme_classic() + 
+  labs(x="SGD Treatment", 
+       y= "Number of Settled Larvae")
+
+violin3_silic
+
+##########################
+## violin plot - silicate x and boxplot
+##########################
+
+violin4_silic <- SettlementCount_updated %>%
+  ggplot(aes(x=silicate, 
+             y=settled, 
+             fill=treatment_level)) +
+  geom_violin(width=1.4) +
+ # geom_boxplot(width=0.4, color="black", alpha=0.2) +
+  #geom_jitter(aes(color="black")) +
+  facet_wrap(~site, scales="free_x") + 
+ # scale_fill_manual(values=c("lightgray", "lightgray")) + 
+  scale_fill_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
+                    limits=c("Ambient", "Low", "Medium", "High")) +
+  #scale_x_discrete(limits=c("Ambient", "Low", "Medium", "High")) +
+  theme_classic() + 
+  labs(x = expression(Silicate~(mu*mol~L^-1)), 
+       y= "Number of Settled Larvae", 
+       fill= "Treatment Level") + 
+  theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20))   # Adjust facet label size
+#  geom_signif(comparisons = SettlementCount_updated$silicate,   
+           #   map_signif_level=TRUE)
+
+violin4_silic
+ggsave(here::here("Outputs","SettlementExperiment","Thesis_Figures","Exp_ViolinPlot.jpg"), 
+       width=11, height =7)
+
+```
+
+
+
+## Models 
+
+```{r}
+
+######################
+## using silicate 
+######################
+
+silicate_modelV <- lm(log(settled+1) ~ silicate + (1|rep_number), data = SettlementCount_updated %>% 
+                       filter(site=="Varari"))
+
+anova(silicate_modelV)
+summary(silicate_modelV)
+r.squaredGLMM(silicate_modelV)
+plot(silicate_modelV)
+
+silicate_modelC <- lm(log(settled+1) ~ silicate + (1|rep_number), data = SettlementCount_updated %>% 
+                       filter(site=="Cabral"))
+
+anova(silicate_modelC)
+summary(silicate_modelC)
+r.squaredGLMM(silicate_modelC)
+plot(silicate_modelC)
+
+
+######################
+## using treatments 
+######################
+
+treatment_modelV <- lm(settled ~ treatment_level, data = SettlementCount_updated %>% 
+                       filter(site=="Varari"))
+
+anova(treatment_modelV)
+summary(treatment_modelV)
+r.squaredGLMM(treatment_modelV)
+check_model(treatment_modelV)
+
+emmeans(treatment_modelV, pairwise~"treatment_level", adjust="Tukey")
+
+treatment_modelC <- lm(settled ~ treatment_level, data = SettlementCount_updated %>% 
+                       filter(site=="Cabral"))
+
+anova(treatment_modelC)
+summary(treatment_modelC)
+r.squaredGLMM(treatment_modelC)
+check_model(treatment_modelC)
+
+emmeans(treatment_modelC, pairwise~"treatment_level", adjust="Tukey")
+
+
+```
+
+
+
+

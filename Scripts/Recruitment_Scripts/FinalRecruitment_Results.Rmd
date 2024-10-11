@@ -186,7 +186,7 @@ recruits_by_silicate <- EnvData_wPocCover %>%
   scale_color_manual(values=c("cornflowerblue", "salmon")) +
   facet_wrap(~Location) +
   geom_smooth(method=lm,
-              formula="y~poly(x,2)",
+              #formula="y~poly(x,2)",
               fill="cornsilk3", 
               alpha=0.2) + ## alpha adjusts the transparency 
   labs(x="Avg Silicate", 

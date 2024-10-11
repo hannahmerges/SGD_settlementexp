@@ -726,11 +726,6 @@ perday_settlement
 perday_settlement_treatmentfacet
 ```
 
-### plot silicate on x, settled 
-
-
-
-
 
 ### Plot based on proportion settled by treatment 
 - Notes from Craig during meeting (Aug 7th) - focus on Cabral first since 6 days vs only 2 days at Varari 

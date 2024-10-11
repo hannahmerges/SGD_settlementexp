@@ -1,0 +1,432 @@
+---
+title: "Models and Figures for Chapter 2 Hypotheses"
+author: "Hannah Merges"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: flatly
+    toc: yes
+    toc_float:
+      collapsed: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# The Story: 
+-  A bit of a chicken and an egg tale: 
+There are three hypotheses that look at a full circle story from settlement to adulthood 
+-  **Hypothesis 1a:** Does percent cover of adult corals drive the total number of settlers on a tile? (spoiler alert: yes)
+-  **Hypothesis 1b:** Does silicate drive the total number of settlers on a tile? (spoiler alert: also yes, but slighly less than cover)
+-  **Hypothesis 2a:** Once settled, what factors drive survivorship? Density dependence! (spoiler alert: duh!)
+-  **Hypothesis 2b:** Beyond density dependence, does SGD impact the survivorship (spoiler alert: no)
+-  **Hypothesis 3:** Of the settlers that survive, does the number impact the percent cover into adulthood? (spoiler alert: sort of, it's complicated)
+
+# The Models: 
+Although this story looks as if it should be a perfect fit for an SEM, there are a few roadblocks: 
+-  percent cover and SGD are highly correlated/covaried. Need to figure out how to deal with that in an SEM because SEM does not accept separate models with the same response variable, so SGD and percent cover would need to be together, but then results are not accurate depiction of the situation. 
+
+-  The zeros are removed from Hyp 3 because only a few indivdual recruits on the plates and they were skewing the data 
+
+-  Considering Varari and Cabral in separate models; however, maybe combine all into one model and use Location as an interaction term
+
+#### Load libraries 
+```{r, echo=FALSE, message=FALSE}
+library(ggeffects)
+library(patchwork)
+library(MASS)
+library(car)
+library(lavaan)
+library(tidyverse)
+library(lmerTest)
+library(lme4)
+library(nlme)
+library(piecewiseSEM)
+library(GGally)
+library(emmeans)
+library(mgcv)
+library(semEff)
+library(here)
+library(PNWColors)
+library(agricolae)
+library(modelsummary)
+library(performance)
+library(modelr)
+library(survival)
+library(betareg)
+library(statmod)
+library(ggsurvfit)
+library(survminer)
+
+```
+
+
+#### Read in Data and Tidy
+```{r, echo=FALSE, message=FALSE}
+
+SettlementDF_Full <- read_csv(here::here("Data", "EnvData_wPocCover.csv"))
+## FULL dataset with pocillopora cover data, env data (nuts, etc), and recruitment counts 
+
+#### tidy the data 
+
+SettlementDF_Full <- SettlementDF_Full %>% 
+  dplyr::select(!c("sal_avg":"NN_avg", "ammonia_avg":"total_count_biotics")) %>% 
+  dplyr::mutate(proportion_alive = sum_total_alive/sum_total, 
+                proportion_alive_log = log(sum_total_alive+1)/log(sum_total+1)) %>% 
+  filter(CowTagID!="C19") ## because no settlers at all so remove entirely from dataset 
+
+```
+
+
+## Hypothesis 1 (a and b):
+-  Using a **generalized linear model**, negative binomial 
+-  **Results:** There is a site difference for the effect of silicate, which makes sense because the two sites are so different in their dynamics (silicate concentration, flow, etc). However, there is no effect of site for percent cover. Percent cover significantly affects the number of total recruits that settle on the tiles; however silicate only affects the total number of settlers at Varari (linearly and non-linearly), but not at Cabral. According to the **AIC**, the silicate model is a lower rank, so percent cover is a better/stronger driver of total settlement, but silicate is still important. Looking at the **standardized effect sizes**, the power of the relationship is strong with .... 
+
+-  Why separate it into 2 models? Because too many variables at play, and silicate & percent cover are too highly correlated 
+
+```{r}
+#######################
+## decision is to keep both sites together and use "Location" as an interaction term in the model 
+#######################
+
+#### Hypothesis 1a - percent cover 
+PocCover_negbinom <- glm.nb((sum_total+1) ~ log(percent_cover+1)*Location, data=SettlementDF_Full)
+
+summary(PocCover_negbinom) ## RESULT: log percent cover is significant, no location interaction or just location effect 
+## AIC = 356.31
+
+## try without logging percent cover 
+PocCover_negbinom2 <- glm.nb((sum_total+1) ~ percent_cover*Location, data=SettlementDF_Full)
+
+summary(PocCover_negbinom2) ## RESULT: slightly less significant, but same results 
+## AIC = 355.82 
+check_model(PocCover_negbinom2)
+
+#### Hypothesis 1b - SGD 
+SGD_negbinom <- glm.nb((sum_total+1) ~ (silicate_avg + I(silicate_avg^2))*Location, data=SettlementDF_Full)
+
+summary(SGD_negbinom) ## RESULT: silicate at Varari is significant both linear and nonlinear 
+## AIC = 361.39 
+check_model(SGD_negbinom) ## obviously very collinear bc linear and nonlinear 
+
+#######################
+## plot the negative binomial 
+#######################
+
+
+
+#######################
+## standardized effect sizes  
+#######################
+
+```
+
+
+## Hypothesis 2a:
+-  Using a **general linear model** (gaussian lm)
+-  **Results:** Significant with or without the 0s dropped for the 4 tiles that had few recruits and 100% mortality. For time being, keep the 0s in the model if significant. It is clear the density dependence is happening and driving the survivorship of the corals that settle on the tiles. Location is once again insignificant, as expected 
+
+```{r}
+
+### model the proportion of settlers that are alive out of the total on the plates 
+
+proportion_alive <- lm(proportion_alive ~ log(sum_total+1)*Location, data=SettlementDF_Full)
+
+anova(proportion_alive) ## barely significant, but still significant, Location is not sig (as expected)
+summary(proportion_alive) ## report R squared too in results 
+check_model(proportion_alive)
+
+### remove the 0s from both Varari and Cabral because skewing the data - 0s meaning the plates that had settlers, but none survived -- there are only a handful of recruits on those plates, so probably weren't even supposed to be there 
+### for all of the plates with 0, 6 or less settlers 
+
+proportion_alive_noZero <- lm(proportion_alive ~ log(sum_total+1)*Location, data=SettlementDF_Full %>%
+                                filter(proportion_alive>0))
+
+anova(proportion_alive_noZero) ## super significant, Location is not sig (as expected)
+summary(proportion_alive_noZero)
+check_model(proportion_alive_noZero) ## high collinearity ** 
+
+######################
+## plot
+######################
+
+### with 0s 
+### don't worry about faceting by location because we are keeping both sites together in the model 
+densitydep_plot <- SettlementDF_Full %>% 
+  ggplot(aes(x=log(sum_total+1), 
+             y=proportion_alive)) +
+  geom_point(size=4, aes(color=Location)) + 
+  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
+                    limits=c("Cabral", "Varari")) +
+  geom_smooth(method="lm", color="black") + 
+  theme_classic() + 
+  labs(x= "Logged Total Settlers", 
+       y= "Proportion of Settlers Alive") + 
+  theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20))
+
+densitydep_plot
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "DensityPlot.jpg"), 
+       width=12, height=9)
+
+
+### without 0s 
+
+densitydep_plot_noZeros <- SettlementDF_Full %>% 
+  filter(proportion_alive>0) %>% 
+   ggplot(aes(x=log(sum_total+1), 
+             y=proportion_alive)) +
+  geom_point(size=4, aes(color=Location)) + 
+  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
+                    limits=c("Cabral", "Varari")) +
+  geom_smooth(method="lm", color="black") + 
+  theme_classic() + 
+  labs(x= "Logged Total Settlers", 
+       y= "Proportion of Settlers Alive") + 
+  theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20))
+
+densitydep_plot_noZeros
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "DensityPlot_NoZero.jpg"), 
+       width=12, height=9)
+
+```
+
+## Hypothesis 2a:
+-  Using a **generalized linear model** (family, student's t distribution OR quasi binomial?) -- student's t does not weight as heavily on outliers 
+-  **Results:**
+
+```{r}
+
+
+```
+
+
+
+
+## Hypothesis 2b:
+-  Using a **general linear model** to plot the residuals of density dependence (Hyp 2a) against silicate to see if survivorship beyond density dependence is being driven by silicate 
+-  **Results:** Either with or without the zeros, models are very insignificant. This indicates there is no additional effect of silicate beyond what survivorship is already determined by density dependence. 
+
+```{r}
+################################
+## calculate residuals: plotting the residuals from previous model from hyp 2a against silicate 
+################################
+
+#### with zeroes 
+resid(proportion_alive)
+
+resid_proportionalive <- SettlementDF_Full %>% 
+  bind_cols(residuals = resid(proportion_alive)) 
+
+#### without zeroes
+resid(proportion_alive_noZero)
+
+resid_proportionalive_noZero <- SettlementDF_Full %>% 
+  filter(proportion_alive>0) %>% 
+  bind_cols(residuals = resid(proportion_alive_noZero)) 
+
+#####################
+## models 
+#####################
+
+#### with zeroes 
+
+resids_silicateEffect_model <- lm(residuals ~ silicate_avg*Location, data=resid_proportionalive)
+
+anova(resids_silicateEffect_model) ## very insignificant 
+summary(resids_silicateEffect_model)
+check_model(resids_silicateEffect_model)
+
+#### without zeroes 
+
+resids_silicateEffect_model_noZero <- lm(residuals ~ silicate_avg*Location, data=resid_proportionalive_noZero)
+
+anova(resids_silicateEffect_model_noZero)
+summary(resids_silicateEffect_model_noZero)
+check_model(resids_silicateEffect_model_noZero)
+
+
+#####################
+## plot 
+#####################
+#### plot the residuals (this basically says that whatever points are above the best fit line are surviving more than expected due to density dependence because of SGD, anything below the line is surviving less than expected due to SGD)
+
+#### with zeroes 
+survivorship_silicateEffect <- resid_proportionalive %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=residuals)) +
+  geom_point(size=4, aes(color=Location)) + 
+  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
+                    limits=c("Cabral", "Varari")) +
+  geom_smooth(method="lm", color="black") + 
+  theme_classic() + 
+  labs(x = expression(Silicate~(mu*mol~L^-1)), 
+       y= "Residuals of Alive Settlers") + 
+  theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20))
+  
+
+survivorship_silicateEffect
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Survivorship_SilicateEffect.jpg"), 
+       width=12, height=9)
+
+
+#### without zeroes 
+survivorship_silicateEffect_noZero <- resid_proportionalive_noZero %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=residuals)) +
+  geom_point(size=4, aes(color=Location)) + 
+  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
+                    limits=c("Cabral", "Varari")) +
+  geom_smooth(method="lm", color="black") + 
+  theme_classic() + 
+  labs(x = expression(Silicate~(mu*mol~L^-1)), 
+       y= "Residuals of Alive Settlers") + 
+  theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20))
+  
+survivorship_silicateEffect_noZero
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Survivorship_SilicateEffect_NoZero.jpg"), 
+       width=12, height=9)
+
+```
+
+
+
+## Hypothesis 3:
+-  Using a **general linear model** (double check correctness)
+-  **Results:**
+-  Notes: when remove 0s from percent cover and total alive (though there are quite a few between both sites), you see a pretty strong relationship. The limitation with this hypothesis is that the data previously collected was percent cover data, and we do not have a true density count, so the 0s might not be a true reflection of the actual number of adult corals near the tile. The proportion of alive settlers is also a bit stronger here than just the total number of settlers. 
+
+```{r}
+
+##################
+## models 
+##################
+
+## total alive 
+alive_predict_cover <- lm(percent_cover ~ sum_total_alive*Location, data =SettlementDF_Full)
+
+anova(alive_predict_cover) ## insignificant, though logging makes it WAY better and almost significant (0.06)
+summary(alive_predict_cover)
+
+## proportion alive 
+
+propalive_predict_cover <- lm(percent_cover ~ proportion_alive*Location, data = SettlementDF_Full)
+
+anova(propalive_predict_cover) ## significant 
+summary(propalive_predict_cover)
+
+##################
+## models without ZERO
+##################
+
+## total alive 
+alive_predict_cover_noZero <- lm(percent_cover ~ sum_total_alive*Location, data =SettlementDF_Full %>% 
+                                   filter(percent_cover>0))
+
+anova(alive_predict_cover_noZero) ## significant, better without logging 
+summary(alive_predict_cover_noZero)
+check_model(alive_predict_cover_noZero)
+
+## proportion alive 
+
+propalive_predict_cover_noZero <- lm(percent_cover ~ proportion_alive*Location, data = SettlementDF_Full %>% 
+                                       filter(percent_cover>0))
+
+anova(propalive_predict_cover_noZero) ## very significant 
+summary(propalive_predict_cover_noZero)
+check_model(propalive_predict_cover_noZero)
+
+
+
+##################
+## plots  
+##################
+
+## total alive 
+
+alive_affect_cover <- SettlementDF_Full %>% 
+  filter(percent_cover>0) %>% ## decide whether to keep in or not **
+  ggplot(aes(x=sum_total_alive, 
+             y=percent_cover)) +
+  geom_point(size=4, aes(color=Location)) + 
+  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
+                    limits=c("Cabral", "Varari")) +
+  geom_smooth(method="lm", color="black") + 
+  theme_classic() + 
+  labs(x = "Total Alive Settlers", 
+       y= "Percent Cover of P. acuta adults") + 
+  theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20))
+
+alive_affect_cover
+
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Cover_AliveEffect.jpg"), 
+       width=12, height=9)
+
+
+## proportion alive 
+
+propalive_affect_cover <- SettlementDF_Full %>% 
+  filter(percent_cover>0) %>% 
+  ggplot(aes(x=proportion_alive, 
+             y=percent_cover)) +
+  geom_point(size=4, aes(color=Location)) + 
+  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
+                    limits=c("Cabral", "Varari")) +
+  geom_smooth(method="lm", color="black") + 
+  theme_classic() + 
+  labs(x = "Proportion of Alive Settlers", 
+       y= "Percent Cover of P. acuta adults") + 
+  theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20))
+
+propalive_affect_cover
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Cover_PropAliveEffect.jpg"), 
+       width=12, height=9)
+
+```
+
+
+## Incorporating an SEM? 
+
+
+
+
+
+
+
+
