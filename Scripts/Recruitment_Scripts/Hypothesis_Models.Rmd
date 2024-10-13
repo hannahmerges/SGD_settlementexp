@@ -32,6 +32,7 @@ Although this story looks as if it should be a perfect fit for an SEM, there are
 -  Considering Varari and Cabral in separate models; however, maybe combine all into one model and use Location as an interaction term
 
 #### Load libraries 
+NOTE: needed to download and install an old version of "heavy" package because it was removed from the CRAN repository in 2022 
 ```{r, echo=FALSE, message=FALSE}
 library(ggeffects)
 library(patchwork)
@@ -58,11 +59,19 @@ library(betareg)
 library(statmod)
 library(ggsurvfit)
 library(survminer)
+#library(heavy)
+library(rstanarm)
+library(devtools)
+library(sjPlot)
+library(effectsize)
+library(marginaleffects)
 
 ```
 
 
 #### Read in Data and Tidy
+-  Includes some background info like range of settler counts between sites and mean number of settlers 
+
 ```{r, echo=FALSE, message=FALSE}
 
 SettlementDF_Full <- read_csv(here::here("Data", "EnvData_wPocCover.csv"))
@@ -76,8 +85,30 @@ SettlementDF_Full <- SettlementDF_Full %>%
                 proportion_alive_log = log(sum_total_alive+1)/log(sum_total+1)) %>% 
   filter(CowTagID!="C19") ## because no settlers at all so remove entirely from dataset 
 
-```
 
+SettlementDF_FullC <- SettlementDF_Full %>% 
+  filter(Location=="Cabral")
+
+min(SettlementDF_FullC$sum_total)
+max(SettlementDF_FullC$sum_total)
+mean(SettlementDF_FullC$sum_total)
+
+min(SettlementDF_FullC$proportion_alive)
+max(SettlementDF_FullC$proportion_alive)
+mean(SettlementDF_FullC$proportion_alive)
+
+SettlementDF_FullV <- SettlementDF_Full %>% 
+  filter(Location=="Varari")
+
+min(SettlementDF_FullV$sum_total)
+max(SettlementDF_FullV$sum_total)
+mean(SettlementDF_FullV$sum_total)
+
+min(SettlementDF_FullV$proportion_alive)
+max(SettlementDF_FullV$proportion_alive)
+mean(SettlementDF_FullV$proportion_alive)
+
+```
 
 ## Hypothesis 1 (a and b):
 -  Using a **generalized linear model**, negative binomial 
@@ -90,24 +121,27 @@ SettlementDF_Full <- SettlementDF_Full %>%
 ## decision is to keep both sites together and use "Location" as an interaction term in the model 
 #######################
 
+############
 #### Hypothesis 1a - percent cover 
 PocCover_negbinom <- glm.nb((sum_total+1) ~ log(percent_cover+1)*Location, data=SettlementDF_Full)
 
 summary(PocCover_negbinom) ## RESULT: log percent cover is significant, no location interaction or just location effect 
-## AIC = 356.31
+#r.squaredGLMM(PocCover_negbinom)
+## AIC = 345.31, p-value = 0.01 
 
 ## try without logging percent cover 
-PocCover_negbinom2 <- glm.nb((sum_total+1) ~ percent_cover*Location, data=SettlementDF_Full)
+PocCover_negbinom2 <- glm.nb(sum_total ~ percent_cover*Location, data=SettlementDF_Full)
 
 summary(PocCover_negbinom2) ## RESULT: slightly less significant, but same results 
-## AIC = 355.82 
+## AIC = 345.31, p-value = 0.01 
 check_model(PocCover_negbinom2)
 
+############
 #### Hypothesis 1b - SGD 
-SGD_negbinom <- glm.nb((sum_total+1) ~ (silicate_avg + I(silicate_avg^2))*Location, data=SettlementDF_Full)
+SGD_negbinom <- glm.nb(sum_total ~ (silicate_avg + I(silicate_avg^2))*Location, data=SettlementDF_Full)
 
 summary(SGD_negbinom) ## RESULT: silicate at Varari is significant both linear and nonlinear 
-## AIC = 361.39 
+## AIC = 351.39 
 check_model(SGD_negbinom) ## obviously very collinear bc linear and nonlinear 
 
 #######################
@@ -116,9 +150,37 @@ check_model(SGD_negbinom) ## obviously very collinear bc linear and nonlinear
 
 
 
+
+
+
+
+
+
+
 #######################
 ## standardized effect sizes  
 #######################
+# Note: won't work on dependent var bc changes count data to continuous which then doesn't use glm.nb()
+## only calculate sef for independent vars of SGD, SGD^2, and percent cover
+## and take sef before the model, create new df 
+
+############
+## get z-scores of just independent vars before going into the model 
+## You can get the zscore by using scale(x, center=TRUE, scale=TRUE)
+## but need to make new df that has "parameter" which is the silicate or cover  and "zscores" which is the standardized score 
+
+
+#percentcover_sef <- tibble("percentcover_zscore" = scale(SettlementDF_Full_C$percent_cover, center = TRUE, scale = TRUE))
+
+
+#SettlementDF_Full_C$z_percent_cover <- scale(SettlementDF_Full_C$percent_cover, center = TRUE, scale = TRUE)
+#SettlementDF_Full_C$z_SGD <- scale(SettlementDF_Full_C$silicate_avg, center = TRUE, scale = TRUE)
+#SettlementDF_Full_C$z_SGD2 <- scale(SettlementDF_Full_C$silicate_avg^2, center = TRUE, scale = TRUE)
+
+#SettlementDF_Full_V$z_percent_cover <- scale(SettlementDF_Full_V$percent_cover, center = TRUE, scale = TRUE)
+#SettlementDF_Full_V$z_SGD <- scale(SettlementDF_Full_V$silicate_avg, center = TRUE, scale = TRUE)
+#SettlementDF_Full_V$z_SGD2 <- scale(SettlementDF_Full_V$silicate_avg^2, center = TRUE, scale = TRUE)
+
 
 ```
 
@@ -199,15 +261,55 @@ densitydep_plot_noZeros <- SettlementDF_Full %>%
 
 densitydep_plot_noZeros
 ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "DensityPlot_NoZero.jpg"), 
-       width=12, height=9)
+       width=10, height=9)
 
 ```
 
 ## Hypothesis 2a:
--  Using a **generalized linear model** (family, student's t distribution OR quasi binomial?) -- student's t does not weight as heavily on outliers 
--  **Results:**
+-  Using a **generalized linear model** (family, student's t distribution OR quasi binomial?) -- student's t does not weight as heavily on outliers. Use instead of a normal distribution in gaussian model. Also works for smaller sample sizes.
+-  **Results:** When trying quasibinomial, results are significant with log link (though, double check if that is correct because already loged sum_total in the model). 
 
 ```{r}
+
+###########################
+## student ts
+###########################
+
+############
+## trying from stack overflow, old heavy package 
+#install_url('http://cran.r-project.org/src/contrib/Archive/heavy/heavy_0.38.19.tar.gz') ## not working right now  
+
+#fit <- heavyLm(m.marietta ~ CRSP, data = SettlementDF_Full, family = Student(df = 6))
+#summary(fit)
+
+
+#############
+## trying with gaussian and identity link 
+#studentt_version1 <- stan_glm(proportion_alive ~ log(sum_total+1)*Location, data = SettlementDF_Full, family = gaussian(link = "identity"))
+
+#summary(studentt_version1) ## not sure how to interpret 
+
+
+
+###########################
+## quasibinomial 
+###########################
+#RESULT: neither of these with "logit" link are significant  
+#BUT significant with "log" family. Without zero model did not converge. 
+
+#### with zeroes 
+quasibin_model <- glm(proportion_alive ~ log(sum_total+1)*Location, family = quasibinomial(link="log"), data=SettlementDF_Full)
+
+summary(quasibin_model)
+check_model(quasibin_model)
+
+#### without zeroes 
+
+quasibin_model_noZero <-  glm(proportion_alive ~ log(sum_total+1)*Location, family = quasibinomial(link="log"), data=SettlementDF_Full %>%
+                                filter(proportion_alive>0))
+
+summary(quasibin_model)
+check_model(quasibin_model_noZero) ## some high collinearity 
 
 
 ```
@@ -309,7 +411,7 @@ survivorship_silicateEffect_noZero <- resid_proportionalive_noZero %>%
   
 survivorship_silicateEffect_noZero
 ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Survivorship_SilicateEffect_NoZero.jpg"), 
-       width=12, height=9)
+       width=10, height=9)
 
 ```
 

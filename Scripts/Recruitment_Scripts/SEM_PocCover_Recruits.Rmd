@@ -137,6 +137,49 @@ qqp(resid(poc_cover_V),"norm")
 qqp(resid(poc_cover_C),"norm")
 ```
 
+
+## Can SEM run with glm.nb()? 
+
+```{r}
+
+PocCover_negbinom <- glm.nb((sum_total+1) ~ log(percent_cover+1)*Location, data=SettlementDF_Full) ##hyp 1a
+SGD_negbinom <- glm.nb((sum_total+1) ~ (silicate_avg + I(silicate_avg^2))*Location, data=SettlementDF_Full) ## hyp1b
+proportion_alive <- lm(proportion_alive ~ log(sum_total+1)*Location, data=SettlementDF_Full) ##hyp 2a
+resids_silicateEffect_model <- lm(residuals ~ silicate_avg*Location, data=resid_proportionalive) ## hyp 2b 
+propalive_predict_cover_noZero <- lm(percent_cover ~ proportion_alive*Location, data = SettlementDF_Full %>% 
+                                       filter(percent_cover>0)) ## hyp 3
+
+
+## test 1 
+fullSEM_test <- psem(
+  PocCover_negbinom,
+  SGD_negbinom,
+  proportion_alive, 
+  resids_silicateEffect_model,
+  propalive_predict_cover_noZero) ## doesn't work bc sum_total is a response twice - remove for rn just with silicate
+
+## test 2 
+fullSEM_test2 <- psem(
+  PocCover_negbinom,
+  proportion_alive, 
+  resids_silicateEffect_model,
+  propalive_predict_cover_noZero)
+
+summary(fullSEM_test2)
+
+
+## test 3 -- using ~~ function to figure out SEM 
+fullSEM_test3 <- psem(
+  PocCover_negbinom,
+  proportion_alive, 
+  resids_silicateEffect_model,
+  propalive_predict_cover_noZero)
+
+summary(fullSEM_test2)
+
+```
+
+
 ## SEM 
 -  using piecewise rather than lavaan because it handles smaller sample sizes better and handles non-normal data and polynomial terms
 - "I have run into issues where tests of d-separation cannot be run because the model is ‘fully identified,’ aka there are no missing paths. In such a model, all variables are causally dependent. One can, however, calculate an AIC value for these models." from [Jon Lefcheck](https://jonlefcheck.net/2014/07/06/piecewise-structural-equation-modeling-in-ecological-research/)
