@@ -1018,6 +1018,49 @@ CAN IGNORE: EXTRA/OLD CODE
 ```
 
 
+#### plotting negative binomials with predicted values 
+```{r, echo=FALSE, message=FALSE}
+######## plot 1 
+PocCover_negbinom$model$fitted <- predict(PocCover_negbinom, type = "response")
+
+cover_nb_sim <- unlist(lapply(PocCover_negbinom$model$fitted, function(x) rnegbin(n = 1000, mu = x, theta = PocCover_negbinom$theta)))
+
+pred_df_cover <- data.frame(SettlementDF_Full$percent_cover, cover_nb_sim)
+
+##
+cover_negb_plot <- pred_df_cover %>%
+  ggplot() +
+  geom_jitter(data = pred_df_cover, aes(SettlementDF_Full.percent_cover, cover_nb_sim), color = "red", alpha = 0.2) +
+  geom_point(data = PocCover_negbinom$model, aes(percent_cover, sum_total))  
+  
+cover_negb_plot         
+
+######## plot 2 
+
+pred_2 <- ggpredict(PocCover_negbinom, terms=c("percent_cover"))
+
+test <- pred_2  %>% 
+  ggplot() + 
+  geom_point() + 
+  geom_smooth(method = "glm.nb")
+
+
+plot(e, rawdata=TRUE, show_ci=TRUE)
+
+######## plot 3 
+
+test2 <- SettlementDF_Full %>% 
+  ggplot(aes(x=percent_cover, 
+             y=sum_total)) + 
+  geom_point() + 
+  geom_smooth(method = "glm.nb")
+
+test2
+
+```
+
+
+
 
 #### Structural equation model for recruitment tiles and Poc cover 
 - Separate Varari and Cabral  

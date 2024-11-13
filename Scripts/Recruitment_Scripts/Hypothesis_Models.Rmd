@@ -21,7 +21,7 @@ There are three hypotheses that look at a full circle story from settlement to a
 -  **Hypothesis 1b:** Does silicate drive the total number of settlers on a tile? (spoiler alert: also yes, but slighly less than cover)
 -  **Hypothesis 2a:** Once settled, what factors drive survivorship? Density dependence! (spoiler alert: duh!)
 -  **Hypothesis 2b:** Beyond density dependence, does SGD impact the survivorship (spoiler alert: no)
--  **Hypothesis 3:** Of the settlers that survive, does the number impact the percent cover into adulthood? (spoiler alert: sort of, it's complicated)
+-  **Hypothesis 3:** Of the settlers that survive, does the number impact the percent cover into adulthood? (spoiler alert: sort of, it's complicated) - NOT DOING THIS ANYMORE BECAUSE WAS NOT SIGNIFICANT 
 
 # The Models: 
 Although this story looks as if it should be a perfect fit for an SEM, there are a few roadblocks: 
@@ -77,45 +77,256 @@ library(marginaleffects)
 SettlementDF_Full <- read_csv(here::here("Data", "EnvData_wPocCover.csv"))
 ## FULL dataset with pocillopora cover data, env data (nuts, etc), and recruitment counts 
 
+CoralGenera_Tiles <- read_csv(here::here("Data", "Recruitment_Tiles_Counts.csv")) 
+
+Poc_cover_data <- read_csv(here::here("Data", "Species_Composition_2022_Danielle.csv"))
+
+
 #### tidy the data 
 
 SettlementDF_Full <- SettlementDF_Full %>% 
-  dplyr::select(!c("sal_avg":"NN_avg", "ammonia_avg":"total_count_biotics")) %>% 
+  dplyr::select(!c("temp_avg":"NN_avg", "ammonia_avg":"total_count_biotics")) %>% 
   dplyr::mutate(proportion_alive = sum_total_alive/sum_total, 
                 proportion_alive_log = log(sum_total_alive+1)/log(sum_total+1)) %>% 
   filter(CowTagID!="C19") ## because no settlers at all so remove entirely from dataset 
 
+##################################
+## what is overall % survivorship? 
+##################################
+mean(SettlementDF_FullC$proportion_alive)
+mean(SettlementDF_FullV$proportion_alive)
 
+
+## is this significant? 
+mean_survivorship <- SettlementDF_Full %>% 
+  dplyr::select(c("Location","proportion_alive"))
+  #summarize()
+
+mean_survivorship_model <- lm(proportion_alive ~ Location, data = mean_survivorship)
+anova(mean_survivorship_model)
+
+##################################
+## background stats 
+##################################
+## Cabral stats 
 SettlementDF_FullC <- SettlementDF_Full %>% 
   filter(Location=="Cabral")
 
 min(SettlementDF_FullC$sum_total)
 max(SettlementDF_FullC$sum_total)
 mean(SettlementDF_FullC$sum_total)
+sd(SettlementDF_FullC$sum_total) / sqrt(length(SettlementDF_FullC$sum_total))
+
 
 min(SettlementDF_FullC$proportion_alive)
 max(SettlementDF_FullC$proportion_alive)
 mean(SettlementDF_FullC$proportion_alive)
+sd(SettlementDF_FullC$proportion_alive) / sqrt(length(SettlementDF_FullC$proportion_alive))
 
+
+max(SettlementDF_FullC$silicate_avg)
+mean(SettlementDF_FullC$silicate_avg)
+sd(SettlementDF_FullC$silicate_avg) / sqrt(length(SettlementDF_FullC$silicate_avg))
+
+min(SettlementDF_FullC$percent_cover)
+max(SettlementDF_FullC$percent_cover)
+mean(SettlementDF_FullC$percent_cover)
+sd(SettlementDF_FullC$percent_cover) / sqrt(length(SettlementDF_FullC$percent_cover))
+
+
+
+
+## Varari stats 
 SettlementDF_FullV <- SettlementDF_Full %>% 
   filter(Location=="Varari")
 
 min(SettlementDF_FullV$sum_total)
 max(SettlementDF_FullV$sum_total)
 mean(SettlementDF_FullV$sum_total)
+sd(SettlementDF_FullV$sum_total) / sqrt(length(SettlementDF_FullV$sum_total))
+
 
 min(SettlementDF_FullV$proportion_alive)
 max(SettlementDF_FullV$proportion_alive)
 mean(SettlementDF_FullV$proportion_alive)
+sd(SettlementDF_FullV$proportion_alive) / sqrt(length(SettlementDF_FullV$proportion_alive))
+
+
+max(SettlementDF_FullV$silicate_avg)
+mean(SettlementDF_FullV$silicate_avg)
+sd(SettlementDF_FullV$silicate_avg) / sqrt(length(SettlementDF_FullV$silicate_avg))
+
+min(SettlementDF_FullV$percent_cover)
+max(SettlementDF_FullV$percent_cover)
+mean(SettlementDF_FullV$percent_cover)
+sd(SettlementDF_FullV$percent_cover) / sqrt(length(SettlementDF_FullV$percent_cover))
+
 
 ```
+
+
+#### Plot for the breakdown of coral genera on the tiles - old 
+```{r}
+
+## tidy data in way that makes sense for plot 
+
+CoralGenera_Tiles_edit <- CoralGenera_Tiles %>% 
+  dplyr::select(!"Notes") %>% 
+  pivot_longer(cols="Pocilloporidae":"Other", names_to = "coral_genera" , values_to= "counts") %>% 
+  group_by(CowTagID, Location, coral_genera) %>%  
+  summarize(genera_total=sum(counts)) %>% 
+  ungroup() %>% 
+  group_by(CowTagID, Location) %>%  
+  mutate(sum_total=sum(genera_total)) %>% 
+  mutate(percentage = (genera_total/sum_total)*100) %>% 
+  filter(CowTagID!="C19") %>% 
+  ungroup() %>% 
+  group_by(coral_genera, Location) %>%
+  mutate(mean_percentage = mean(percentage),
+         se = sd(percentage) / sqrt(n()))  # Standard error calculation
+
+#######################################
+## for stacked bar plot - no averages 
+########################################
+
+## calculate total at Varari and at Cabral 
+      ## 433 at Cabral and 676 at Varari 
+
+CoralGenera_Tiles_editV <- CoralGenera_Tiles %>% 
+  dplyr::select(!"Notes") %>%
+  filter(Location=="Varari") %>% 
+  pivot_longer(cols="Pocilloporidae":"Other", names_to = "coral_genera" , values_to= "counts") %>% 
+  group_by(Location, coral_genera) %>% 
+  summarize(genera_total=sum(counts), 
+            percent = (genera_total/676)*100)
+
+CoralGenera_Tiles_editC <- CoralGenera_Tiles %>% 
+  dplyr::select(!"Notes") %>%
+  filter(Location=="Cabral") %>% 
+  pivot_longer(cols="Pocilloporidae":"Other", names_to = "coral_genera" , values_to= "counts") %>% 
+  group_by(Location, coral_genera) %>% 
+  summarize(genera_total=sum(counts), 
+            percent = (genera_total/433)*100)
+
+
+CoralGenera_Tiles_edit2 <- CoralGenera_Tiles_editC %>% 
+  bind_rows(CoralGenera_Tiles_editV)
+  
+########################################
+## plot percent total of the genera
+########################################
+
+coral_generaplot1 <- CoralGenera_Tiles_edit2 %>% 
+  mutate(grp = factor(coral_genera, levels = c("Acroporidae","Poritidae","Other","Pocilloporidae"))) %>% # put the levels in an order I want for plotting
+  ggplot(aes(x=Location, 
+             y=percent, 
+             fill=grp)) + 
+  geom_col() + 
+  #geom_errorbar(aes(ymin = mean_percentage - se, 
+                  #  ymax = mean_percentage + se), 
+               # width = 0.2, position = position_dodge(0.7)) +  # Add error bars
+  theme_classic() + 
+  scale_fill_manual(values=c("coral2", "chocolate4", "gray", "burlywood"), 
+                    limits=c("Acroporidae", "Poritidae", "Other", "Pocilloporidae")) +
+  labs(x = "Location", 
+       y= "Percentage of Total Settlers", 
+       fill= "Coral Genera") + 
+  theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20), 
+        legend.justification.inside = c(1, 1)) ### NOT WORKING RIGHT NOW 
+  
+coral_generaplot1
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "coral_genera_tiles.jpg"), 
+       width=10, height=7)
+
+```
+
+
+#### Poc acuta cover - updated November 7th, 2024
+-  dataframe "full" is coming from Poc_Cover_data script
+```{r}
+
+fullC <- full %>% 
+  filter(Location=="Cabral")
+
+min(fullC$pacuta_cover)
+max(fullC$pacuta_cover)
+mean(fullC$pacuta_cover)
+sd(fullC$pacuta_cover) / sqrt(length(fullC$pacuta_cover))
+
+fullV <- full %>% 
+  filter(Location=="Varari")
+
+##########################
+## calculate % cover of corals
+##########################
+min(fullC$coral_percentcover)
+max(fullC$coral_percentcover)
+mean(fullC$coral_percentcover)
+sd(fullC$coral_percentcover) / sqrt(length(fullC$coral_percentcover))
+
+min(fullV$coral_percentcover)
+max(fullV$coral_percentcover)
+mean(fullV$coral_percentcover)
+sd(fullV$coral_percentcover) / sqrt(length(fullV$coral_percentcover))
+
+##########################
+## calculate % cover of P acuta 
+##########################
+min(fullC$pacuta_cover)
+max(fullC$pacuta_cover)
+mean(fullC$pacuta_cover)
+sd(fullC$pacuta_cover) / sqrt(length(fullC$pacuta_cover))
+
+min(fullV$pacuta_cover)
+max(fullV$pacuta_cover)
+mean(fullV$pacuta_cover)
+sd(fullV$pacuta_cover) / sqrt(length(fullV$pacuta_cover))
+
+
+##########################
+## calculate actual number of settlers, model, and se 
+##########################
+
+min(fullV$sum_total)
+max(fullV$sum_total)
+mean(fullV$sum_total)
+sd(fullV$sum_total) / sqrt(length(fullV$sum_total))
+
+##########################
+## calculate actual number of survivors, model, and se 
+##########################
+
+min(fullV$sum_total_alive)
+max(fullV$sum_total_alive)
+mean(fullV$sum_total_alive)
+sd(fullV$sum_total_alive) / sqrt(length(fullV$sum_total_alive))
+
+min(fullC$sum_total_alive)
+max(fullC$sum_total_alive)
+mean(fullC$sum_total_alive)
+sd(fullC$sum_total_alive) / sqrt(length(fullC$sum_total_alive))
+
+
+
+```
+
+
 
 ## Hypothesis 1 (a and b):
 -  Using a **generalized linear model**, negative binomial 
 -  **Results:** There is a site difference for the effect of silicate, which makes sense because the two sites are so different in their dynamics (silicate concentration, flow, etc). However, there is no effect of site for percent cover. Percent cover significantly affects the number of total recruits that settle on the tiles; however silicate only affects the total number of settlers at Varari (linearly and non-linearly), but not at Cabral. According to the **AIC**, the silicate model is a lower rank, so percent cover is a better/stronger driver of total settlement, but silicate is still important. Looking at the **standardized effect sizes**, the power of the relationship is strong with .... 
 
 -  Why separate it into 2 models? Because too many variables at play, and silicate & percent cover are too highly correlated 
+-  Explanatory values are independent of the family... but they sometimes have to be logged or transformed if you have issues with your residuals being normal in your check model
 
+### models 
+-  logged percent cover 
 ```{r}
 #######################
 ## decision is to keep both sites together and use "Location" as an interaction term in the model 
@@ -123,40 +334,159 @@ mean(SettlementDF_FullV$proportion_alive)
 
 ############
 #### Hypothesis 1a - percent cover 
-PocCover_negbinom <- glm.nb((sum_total+1) ~ log(percent_cover+1)*Location, data=SettlementDF_Full)
+############
+PocCover_negbinom_old <- glm.nb(sum_total ~ log(percent_cover+1)*Location, data=SettlementDF_Full)
 
-summary(PocCover_negbinom) ## RESULT: log percent cover is significant, no location interaction or just location effect 
-#r.squaredGLMM(PocCover_negbinom)
-## AIC = 345.31, p-value = 0.01 
-
-## try without logging percent cover 
-PocCover_negbinom2 <- glm.nb(sum_total ~ percent_cover*Location, data=SettlementDF_Full)
-
-summary(PocCover_negbinom2) ## RESULT: slightly less significant, but same results 
-## AIC = 345.31, p-value = 0.01 
-check_model(PocCover_negbinom2)
+PocCover_negbinom_new <- glm.nb(sum_total ~ log(pacuta_cover+1)*Location, data=full)
+anova(PocCover_negbinom_new)
+summary(PocCover_negbinom)  
+## AIC = 341.62
+r.squaredGLMM(PocCover_negbinom)
+check_model(PocCover_negbinom)
 
 ############
 #### Hypothesis 1b - SGD 
-SGD_negbinom <- glm.nb(sum_total ~ (silicate_avg + I(silicate_avg^2))*Location, data=SettlementDF_Full)
+############
+SGD_negbinom <- glm.nb(sum_total+1 ~ ((silicate_avg) + I(silicate_avg^2))*Location, data=SettlementDF_Full)
 
-summary(SGD_negbinom) ## RESULT: silicate at Varari is significant both linear and nonlinear 
-## AIC = 351.39 
-check_model(SGD_negbinom) ## obviously very collinear bc linear and nonlinear 
+anova(SGD_negbinom) ## SIGNIFICANT FOR VARARI 
+summary(SGD_negbinom)
+## AIC = 355.44
+check_model(SGD_negbinom)
+
+```
+
+### neg binomial plots 
+
+```{r}
 
 #######################
 ## plot the negative binomial 
 #######################
 
+#########################
+#### Percent Cover 
+#########################
+
+PocCover_negbinom ## model 
+PocCover_negbinom <- glm.nb(sum_total ~ percent_cover*Location, data=SettlementDF_Full)
+summary(PocCover_negbinom)
+
+######## plot 4  --> doesn't have predicted data in there though 
+
+newdata_cover = predict_response(PocCover_negbinom, terms= "percent_cover")
+
+newdata_cover2 <- SettlementDF_Full %>%
+  mutate(fitted_values = predict(PocCover_negbinom, terms= "percent_cover")) 
+
+
+test4_percentcover_predplot <- ggplot() + 
+  geom_point(data = full,
+             aes(x=pacuta_cover, 
+                 y=sum_total, 
+                 color=Location), 
+             size=4) +
+ scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
+                    limits=c("Cabral", "Varari")) +
+ # geom_line(data = newdata_cover, 
+         #   aes(x=x, 
+             #   y=predicted)) #+ 
+  geom_smooth(data = full, 
+             aes(x=pacuta_cover, 
+                  y=sum_total), 
+             method = "glm.nb", formula = "y~x", color="black", alpha=0.5) + 
+ coord_cartesian(ylim = c(0, 250)) + 
+  theme_classic() + 
+  labs(x="Percent Cover of Adults", 
+       y="Sum Total of Settlers Present on Tiles") + 
+      theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20))
+
+
+test4_percentcover_predplot
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Percent_Cover_glmnbPlot.jpg"), 
+       width=10, height=7)
+
+######################
+#### SGD 
+######################
+
+SGD_negbinom ## model 
+SGD_negbinom <- glm.nb(sum_total ~ (silicate_avg + I(silicate_avg^2))*Location, data=SettlementDF_Full)
+
+anova(SGD_negbinom)
+summary(SGD_negbinom)
+
+
+SGD_V_glmnbPlot <- ggplot() + 
+  geom_point(data = SettlementDF_Full %>% filter(Location=="Varari"),
+             aes(x=(silicate_avg^2), 
+                 y=sum_total), 
+             size=4, 
+             color="firebrick4") +
+ # geom_line(data = newdata_cover, 
+         #   aes(x=x, 
+             #   y=predicted)) #+ 
+  geom_smooth(data = SettlementDF_Full %>% filter(Location=="Varari"), 
+             aes(x=I(silicate_avg^2), 
+                  y=sum_total), 
+             method = "glm.nb", formula = "y~poly(x,2)", color="black", alpha=0.5) + 
+  theme_classic() + 
+  labs(x = expression(Average~Silicate~(mu*mol~L^-1)), 
+       y="Sum Total of Settlers Present on Tiles") + 
+    theme(axis.text.x=element_text(size=40), 
+        axis.text.y=element_text(size=40), 
+        axis.title.x=element_text(size=40), 
+        axis.title.y=element_text(size=30), 
+        legend.text=element_text(size=40),  # Adjust legend text size
+        legend.title=element_text(size=40), # Adjust legend title size
+        strip.text=element_text(size=40))
+
+SGD_V_glmnbPlot
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "SGD_V_glmnbPlot.jpg"), 
+       width=11, height=9)
 
 
 
+SGD_C_glmnbPlot <- ggplot() + 
+  geom_point(data = SettlementDF_Full %>% filter(Location=="Cabral"),
+             aes(x=(silicate_avg^2), 
+                 y=sum_total), 
+             size=4, 
+             color="goldenrod") +
+ # geom_line(data = newdata_cover, 
+         #   aes(x=x, 
+             #   y=predicted)) #+ 
+ # geom_smooth(data = SettlementDF_Full %>% filter(Location=="Cabral"), 
+        #     aes(x=I(silicate_avg^2), 
+           #       y=sum_total), 
+          #   method = "glm.nb", formula = "y~poly(x,2)", color="black", alpha=0.5) + 
+  theme_classic() + 
+  labs(x = expression(Average~Silicate~(mu*mol~L^-1)), 
+       y="Sum Total of Settlers Present on Tiles") + 
+    theme(axis.text.x=element_text(size=40), 
+        axis.text.y=element_text(size=40), 
+        axis.title.x=element_text(size=40), 
+        axis.title.y=element_text(size=30), 
+        legend.text=element_text(size=40),  # Adjust legend text size
+        legend.title=element_text(size=40), # Adjust legend title size
+        strip.text=element_text(size=40))
+
+SGD_C_glmnbPlot
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "SGD_C_glmnbPlot.jpg"), 
+       width=11, height=9)
 
 
+```
 
+### standardized effects plots 
 
-
-
+```{r}
 #######################
 ## standardized effect sizes  
 #######################
@@ -216,12 +546,13 @@ check_model(proportion_alive_noZero) ## high collinearity **
 ### with 0s 
 ### don't worry about faceting by location because we are keeping both sites together in the model 
 densitydep_plot <- SettlementDF_Full %>% 
-  ggplot(aes(x=log(sum_total+1), 
+  ggplot(aes(x=sum_total, 
              y=proportion_alive)) +
   geom_point(size=4, aes(color=Location)) + 
   scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
                     limits=c("Cabral", "Varari")) +
   geom_smooth(method="lm", color="black") + 
+  #coord_trans(x="log") +
   theme_classic() + 
   labs(x= "Logged Total Settlers", 
        y= "Proportion of Settlers Alive") + 
@@ -249,8 +580,197 @@ densitydep_plot_noZeros <- SettlementDF_Full %>%
                     limits=c("Cabral", "Varari")) +
   geom_smooth(method="lm", color="black") + 
   theme_classic() + 
+  #coord_trans(x="log") +
   labs(x= "Logged Total Settlers", 
        y= "Proportion of Settlers Alive") + 
+  theme(axis.text.x=element_text(size=30), 
+        axis.text.y=element_text(size=30), 
+        axis.title.x=element_text(size=30), 
+        axis.title.y=element_text(size=30), 
+        legend.text=element_text(size=30),  # Adjust legend text size
+        legend.title=element_text(size=30), # Adjust legend title size
+        strip.text=element_text(size=30))
+
+densitydep_plot_noZeros
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "DensityPlot_NoZero2.jpg"), 
+       width=12, height=9)
+
+```
+
+
+## Hypothesis 2b:
+-  Using a **general linear model** to plot the residuals of density dependence (Hyp 2a) against silicate to see if survivorship beyond density dependence is being driven by silicate 
+-  **Results:**  
+
+```{r}
+################################
+## calculate residuals: plotting the residuals from previous model from hyp 2a against silicate 
+################################
+
+#### with zeroes 
+resid(proportion_alive)
+
+resid_proportionalive <- SettlementDF_Full %>% 
+  bind_cols(residuals = resid(proportion_alive)) 
+
+#### without zeroes
+resid(proportion_alive_noZero)
+
+resid_proportionalive_noZero <- SettlementDF_Full %>% 
+  filter(proportion_alive>0) %>% 
+  bind_cols(residuals = resid(proportion_alive_noZero)) 
+
+#####################
+## models 
+#####################
+
+#### with zeroes 
+
+resids_silicateEffect_model <- lm(residuals ~ (silicate_avg + I(silicate_avg^2))*Location , data=resid_proportionalive)
+
+anova(resids_silicateEffect_model) 
+summary(resids_silicateEffect_model)
+r.squaredGLMM(resids_silicateEffect_model)
+check_model(resids_silicateEffect_model)
+
+#### without zeroes 
+
+resids_silicateEffect_model_noZero <- lm(residuals ~ (silicate_avg + I(silicate_avg^2))*Location, data=resid_proportionalive_noZero)
+
+anova(resids_silicateEffect_model_noZero)
+summary(resids_silicateEffect_model_noZero)
+check_model(resids_silicateEffect_model_noZero)
+
+
+#####################
+## plot 
+#####################
+#### plot the residuals (this basically says that whatever points are above the best fit line are surviving more than expected due to density dependence because of SGD, anything below the line is surviving less than expected due to SGD)
+
+#### with zeroes 
+survivorship_silicateEffectC <- resid_proportionalive %>% 
+  filter(Location=="Cabral") %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=residuals)) +
+  geom_point(size=4, color= "darkgoldenrod3") + 
+#  scale_color_manual(values="firebrick4") +
+  #geom_smooth(method="lm", formula = "y~poly(x,2)", color="black") + 
+  theme_classic() + 
+  labs(x = expression(Silicate~(mu*mol~L^-1)), 
+       y= "Residuals") + 
+  theme(axis.text.x=element_text(size=40), 
+        axis.text.y=element_text(size=40), 
+        axis.title.x=element_text(size=40), 
+        axis.title.y=element_text(size=40), 
+        legend.text=element_text(size=40),  # Adjust legend text size
+        legend.title=element_text(size=40), # Adjust legend title size
+        strip.text=element_text(size=40))
+  
+survivorship_silicateEffectC
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Survivorship_SilicateEffectC.jpg"), 
+       width=12, height=10)
+
+
+#### without zeroes 
+survivorship_silicateEffect_noZero <- resid_proportionalive_noZero %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=residuals)) +
+  geom_point(size=4, aes(color=Location)) + 
+  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
+                    limits=c("Cabral", "Varari")) +
+ # geom_smooth(method="lm", color="black") + 
+  theme_classic() + 
+  labs(x = expression(Silicate~(mu*mol~L^-1)), 
+       y= "Residuals of Alive Settlers") + 
+  geom_smooth(method=lm, formula="y~poly(x,2)", color="black") + 
+  coord_trans(x="log") +
+  theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20))
+  
+survivorship_silicateEffect_noZero
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Survivorship_SilicateEffect_NoZero2.jpg"), 
+       width=10, height=9)
+
+```
+
+
+
+
+
+
+
+
+# NOT USING ANYMORE 
+## Hypothesis 3:
+-  Using a **general linear model** (double check correctness)
+-  **Results:**
+-  Notes: when remove 0s from percent cover and total alive (though there are quite a few between both sites), you see a pretty strong relationship. The limitation with this hypothesis is that the data previously collected was percent cover data, and we do not have a true density count, so the 0s might not be a true reflection of the actual number of adult corals near the tile. The proportion of alive settlers is also a bit stronger here than just the total number of settlers. 
+
+```{r}
+
+##################
+## models 
+##################
+
+## total alive 
+alive_predict_cover <- lm(log(percent_cover+1) ~ log(sum_total_alive+1)*Location, data = SettlementDF_Full)
+
+anova(alive_predict_cover) ## insignificant, though logging makes it WAY better and almost significant (0.06)
+summary(alive_predict_cover)
+
+## proportion alive 
+
+propalive_predict_cover <- lm(percent_cover ~ proportion_alive*Location, data = SettlementDF_Full)
+
+anova(propalive_predict_cover) ## significant 
+summary(propalive_predict_cover)
+check_model(propalive_predict_cover)
+
+##################
+## models without ZERO
+##################
+
+## total alive 
+alive_predict_cover_noZero <- lm(percent_cover ~ log(sum_total_alive+1), data = SettlementDF_FullC %>% 
+                                   filter(percent_cover>0))
+
+anova(alive_predict_cover_noZero) ## significant ONLY FOR LOCATION, without logging 
+summary(alive_predict_cover_noZero)
+check_model(alive_predict_cover_noZero)
+
+## proportion alive 
+
+propalive_predict_cover_noZero <- lm(percent_cover ~ proportion_alive*Location, data = SettlementDF_Full %>% 
+                                       filter(percent_cover>0))
+
+anova(propalive_predict_cover_noZero) ## very significant 
+summary(propalive_predict_cover_noZero)
+check_model(propalive_predict_cover_noZero)
+
+
+
+##################
+## plots  
+##################
+
+## total alive 
+
+alive_affect_cover <- SettlementDF_Full %>% 
+  filter(percent_cover>0) %>% ## decide whether to keep in or not **
+  ggplot(aes(x=sum_total_alive, 
+             y=percent_cover)) +
+  geom_point(size=4, aes(color=Location)) + 
+  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
+                    limits=c("Cabral", "Varari")) +
+  geom_smooth(method="lm", color="black") + 
+  theme_classic() + 
+  labs(x = "Total Alive Settlers", 
+       y = expression("Percent Cover of " * italic("P. acuta") * " adults ")) +
   theme(axis.text.x=element_text(size=20), 
         axis.text.y=element_text(size=20), 
         axis.title.x=element_text(size=20), 
@@ -259,15 +779,323 @@ densitydep_plot_noZeros <- SettlementDF_Full %>%
         legend.title=element_text(size=20), # Adjust legend title size
         strip.text=element_text(size=20))
 
-densitydep_plot_noZeros
-ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "DensityPlot_NoZero.jpg"), 
-       width=10, height=9)
+alive_affect_cover
+
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Cover_AliveEffect.jpg"), 
+       width=12, height=9)
+
+
+## proportion alive 
+
+propalive_affect_cover <- SettlementDF_Full %>% 
+  filter(percent_cover>0) %>% 
+  ggplot(aes(x=proportion_alive, 
+             y=percent_cover)) +
+  geom_point(size=4, aes(color=Location)) + 
+  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
+                    limits=c("Cabral", "Varari")) +
+  geom_smooth(method="lm", color="black") + 
+  theme_classic() + 
+  labs(x = "Proportion of Alive Settlers", 
+       y = expression("Percent Cover of " * italic("P. acuta") * " adults ")) +
+  theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20))
+
+propalive_affect_cover
+ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Cover_PropAliveEffect.jpg"), 
+       width=12, height=9)
+
+```
+
+
+## Percent Cover and SGD 
+
+```{r}
+
+
+percentcover_SGD <- lm(log(percent_cover+1) ~ silicate_avg*Location, data = SettlementDF_Full)
+
+anova(percentcover_SGD)
+check_model(percentcover_SGD)
+
+```
+
+
+
+
+#### testing salinity relationships 
+
+```{r}
+
+##################################
+## salinity stats - see a pattern? 
+##################################
+## separate df for salinity stats 
+SettlementDF_FullC 
+SettlementDF_FullV
+
+
+## Cabral stats
+
+min(SettlementDF_FullC$sal_avg)
+max(SettlementDF_FullC$sal_avg)
+mean(SettlementDF_FullC$sal_avg)
+sd(SettlementDF_FullC$sal_avg) / sqrt(length(SettlementDF_FullC$sal_avg))
+
+
+## Varari stats 
+
+min(SettlementDF_FullV$sal_avg)
+max(SettlementDF_FullV$sal_avg)
+mean(SettlementDF_FullV$sal_avg)
+sd(SettlementDF_FullV$sal_avg) / sqrt(length(SettlementDF_FullV$sal_avg))
+
+##################################
+## models to see if there is any pattern, probably not since salinity is so small of a range  
+##################################
+
+## both sites together 
+salavg_negbinom <- glm.nb(sum_total ~ sal_avg*Location, data=SettlementDF_Full)
+
+anova(salavg_negbinom)
+summary(salavg_negbinom) ## RESULT: definitely not significant 
+check_model(salavg_negbinom) ## 
+
+```
+
+
+
+#### Total spp coverage 
+```{r}
+Poc_cover_data_edit2 <- Poc_cover_data %>% 
+  select(!c("Date", "PhotoNum", "Notes")) %>% 
+  filter(Taxa!="Bare Rock",Taxa!="Sand",Taxa!="Rubble", Location!="Varari_Maya") %>% 
+  group_by(CowTagID) 
+
+Poc_cover_data_edit3 <- Poc_cover_data_edit2 %>% 
+  dplyr::summarise(total_count_biotics = sum(SpeciesCounts)) %>% 
+  filter(CowTagID!="VSEEP") ## missing C14 
+
+Poc_cover_data_edit4 <- Poc_cover_data_edit2 %>% 
+  filter(Taxa=="Pocillopora acuta"|Taxa=="Porites rus"|Taxa=="Montipora verrilli"|Taxa=="Montipora setosa"|Taxa=="Montipora grisea"|Taxa=="Porites irregularis"|Taxa=="Porites lobata"|Taxa=="Pocillopora verrucosa"|Taxa=="Pavona chiriquiensis"|Taxa=="	
+Pavona cactus"|Taxa=="Leptastrea transversa"|Taxa=="Acropora"|Taxa=="Acropora pulchra"|Taxa=="Montipora capitata") %>% 
+  group_by(CowTagID) %>% 
+  mutate(SpeciesCounts_Coral = SpeciesCounts) %>% 
+  dplyr::select(!SpeciesCounts)
+ 
+### joins correlated biotics counts for that CowTag -- still with missing cowtags without P acuta data 
+Poc_cover_data_edit5 <- Poc_cover_data_edit4 %>% 
+  left_join(Poc_cover_data_edit3) %>% 
+  group_by(CowTagID, Location, SpeciesCounts_Coral,total_count_biotics) %>% 
+  dplyr::mutate(percent_cover = (SpeciesCounts_Coral/total_count_biotics)*(100)) ### should be divided by 200 (all the points in the square) -- for all corals and then for just P acuta 
+
+##############################
+## total cover % and then what is Pocillopora of that total 
+##############################
+
+Poc_cover_data_edit6 <- Poc_cover_data_edit5 %>%
+  group_by(CowTagID, Location) %>% 
+  dplyr::mutate(total_coral_cover_forCowTag = sum(percent_cover))
+
+Poc_cover_data_edit6_C <- Poc_cover_data_edit5 %>%
+  filter(Location=="Cabral") %>% 
+  group_by(CowTagID) %>% 
+  dplyr::summarize(total_coral_cover_forCowTag = sum(percent_cover)) 
+
+Poc_cover_data_edit6_V <- Poc_cover_data_edit5 %>%
+  filter(Location=="Varari") %>% 
+  group_by(CowTagID) %>% 
+  dplyr::summarize(total_percent_cover = sum(percent_cover)) 
+
+
+min(Poc_cover_data_edit6_C$total_percent_cover)
+max(Poc_cover_data_edit6_C$total_percent_cover)
+mean(Poc_cover_data_edit6_C$total_percent_cover)
+sd(Poc_cover_data_edit6_C$total_percent_cover) / sqrt(length(Poc_cover_data_edit6$total_percent_cover))
+
+min(Poc_cover_data_edit6_V$total_percent_cover)
+max(Poc_cover_data_edit6_V$total_percent_cover)
+mean(Poc_cover_data_edit6_V$total_percent_cover)
+sd(Poc_cover_data_edit6_V$total_percent_cover) / sqrt(length(Poc_cover_data_edit6$total_percent_cover))
+
+#######
+#######
+
+Poc_cover_data_edit7 <- Poc_cover_data_edit6 %>%
+  filter(Taxa=='Pocillopora acuta') %>% 
+  dplyr::mutate(Pacuta_percent_cover = (percent_cover/total_coral_cover_forCowTag)*100) #### percent cover 
+
+Poc_cover_data_edit7_C <- Poc_cover_data_edit7 %>%
+  filter(Location=="Cabral")
+
+Poc_cover_data_edit7_V <- Poc_cover_data_edit7 %>%
+  filter(Location=="Varari") 
+
+
+min(Poc_cover_data_edit7_C$Pacuta_percent_cover)
+max(Poc_cover_data_edit7_C$Pacuta_percent_cover)
+mean(Poc_cover_data_edit7_C$Pacuta_percent_cover)
+sd(Poc_cover_data_edit7_C$Pacuta_percent_cover) / sqrt(length(Poc_cover_data_edit7_C$Pacuta_percent_cover))
+
+min(Poc_cover_data_edit7_V$Pacuta_percent_cover)
+max(Poc_cover_data_edit7_V$Pacuta_percent_cover)
+mean(Poc_cover_data_edit7_V$Pacuta_percent_cover)
+sd(Poc_cover_data_edit7_V$Pacuta_percent_cover) / sqrt(length(Poc_cover_data_edit7_V$Pacuta_percent_cover))
+
+
+###############################
+## calculate percent cover by species between site
+###############################
+
+## Pocillopora  
+
+Pocillopora <- Poc_cover_data_edit5 %>% 
+  filter(Taxa=="Pocillopora acuta"|Taxa=="Pocillopora verrucosa") %>% 
+  group_by(Location) %>% 
+  dplyr::summarize(totalspp = sum(SpeciesCounts_Coral), 
+                   totalpercentcover = sum(percent_cover))
+
+
+## Montiporas 
+Montiporas <- Poc_cover_data_edit5 %>% 
+  filter(Taxa=="Montipora verrilli"|Taxa=="Montipora setosa"|Taxa=="Montipora grisea"|Taxa=="Montipora capitata") %>% 
+  group_by(Location) %>% 
+  dplyr::summarize(totalspp = sum(SpeciesCounts_Coral), 
+                   totalpercentcover = sum(percent_cover))
+
+## Porites 
+Porites <- Poc_cover_data_edit5 %>% 
+  filter(Taxa=="Porites lobata"|Taxa=="Porites rus"|Taxa=="Porites irregularis") %>% 
+  group_by(Location) %>% 
+  dplyr::summarize(totalspp = sum(SpeciesCounts_Coral), 
+                   totalpercentcover = sum(percent_cover))
+
+
+## Acropora 
+Acropora <- Poc_cover_data_edit5 %>% 
+  filter(Taxa=="Acropora"|Taxa=="Acropora pulchra") %>% 
+  group_by(Location) %>% 
+  dplyr::summarize(totalspp = sum(SpeciesCounts_Coral), 
+                   totalpercentcover = sum(percent_cover))
+
+## Leptastrea 
+Leptastrea <- Poc_cover_data_edit5 %>% 
+  filter(Taxa=="Leptastrea transversa") %>% 
+  group_by(Location) %>% 
+  dplyr::summarize(totalspp = sum(SpeciesCounts_Coral), 
+                   totalpercentcover = sum(percent_cover))
+
+## Pavona 
+Pavona <- Poc_cover_data_edit5 %>% 
+  filter(Taxa=="Pavona chiriquiensis"|Taxa=="Pavona cactus") %>% 
+  group_by(Location) %>% 
+  dplyr::summarize(totalspp = sum(SpeciesCounts_Coral), 
+                   totalpercentcover = sum(percent_cover))
+
+
+##############################################
+## Calculate algal turf cover across SGD gradient 
+##############################################
+
+turf_cover <- Poc_cover_data_edit2 %>% 
+  filter(Taxa=="Turf")
+
+turf_cover_joined <- turf_cover %>% 
+  full_join(Poc_cover_data_edit3) %>% 
+  group_by(CowTagID, Taxa, Location) %>% 
+  dplyr::summarize(total_algae = sum(SpeciesCounts), 
+                   percent_cover_algae = (total_algae/total_count_biotics)*(100)) %>% 
+  full_join(SettlementDF_Full) %>% 
+  filter(CowTagID!= "C19",CowTagID!= "C14") %>% 
+  dplyr::select(!c("sum_total":"sal_avg","percent_cover":"proportion_alive_log")) 
+ 
+
+turf_silicate <- lm(percent_cover_algae ~ silicate_avg*Location, data = turf_cover_joined)
+anova(turf_silicate)
+    
+
+CCA_cover <- Poc_cover_data_edit2 %>% 
+  filter(Taxa=="Crustose Corallines")
+         
+
+CCA_cover_joined <- CCA_cover %>% 
+  full_join(Poc_cover_data_edit3) %>% 
+  group_by(CowTagID, Taxa, Location) %>% 
+  dplyr::summarize(total_CCA = sum(SpeciesCounts), 
+                   percent_cover_CCA = (total_CCA/total_count_biotics)*(100)) %>% 
+  full_join(SettlementDF_Full) %>% 
+  filter(CowTagID!= "C19",CowTagID!= "C14") %>% 
+  dplyr::select(!c("sum_total":"sal_avg","percent_cover":"proportion_alive_log")) 
+
+CCA_silicate <- lm(percent_cover_CCA ~ silicate_avg*Location, data = CCA_cover_joined)
+anova(CCA_silicate)
+
+
+## quick plot to see direction of relationship 
+
+CCAplot <- CCA_cover_joined %>% 
+  ggplot(aes(x=silicate_avg, 
+             y=percent_cover_CCA)) + 
+  geom_point() + 
+  facet_wrap(~Location, scales="free_x")
+  
+CCAplot
+
+```
+
+
+
+## Incorporating an SEM? 
+
+
+
+
+
+##### EXTRA 
+- other old version of models - moving here to clean up space up top 
+```{r}
+PocCover_negbinom2 <- glm.nb((sum_total+1) ~ log(percent_cover+1)*Location, data=SettlementDF_Full)
+
+anova(PocCover_negbinom)
+summary(PocCover_negbinom2)
+check_model(PocCover_negbinom2)
+## RESULT: log percent cover is significant, no location interaction or just location effect 
+#r.squaredGLMM(PocCover_negbinom)
+## AIC = 345.31, p-value = 0.01 
+
+
+## logged? 
+SGD_negbinom2 <- glm.nb(sum_total+1 ~ (log(silicate_avg) + I(log(silicate_avg^2)))*Location, data=SettlementDF_Full)
+
+anova(SGD_negbinom2)
+summary(SGD_negbinom2) 
+check_model(SGD_negbinom2) ## obviously very colinear bc linear and nonlinear 
+
+
+## try logged silicate 
+resids_silicateEffect_model_noZero_log <- lm(residuals ~ (log(silicate_avg+1) + I(log(silicate_avg+1)^2))*Location, data=resid_proportionalive_noZero)
+
+anova(resids_silicateEffect_model_noZero_log)
+summary(resids_silicateEffect_model_noZero_log)
+check_model(resids_silicateEffect_model_noZero_log)
+
+## try logged 
+resids_silicateEffect_model_log <- lm(residuals ~ (log(silicate_avg+1) + I(log(silicate_avg+1)^2))*Location , data=resid_proportionalive)
+
+anova(resids_silicateEffect_model_log) 
+summary(resids_silicateEffect_model)
+check_model(resids_silicateEffect_model)
 
 ```
 
 ## Hypothesis 2a:
 -  Using a **generalized linear model** (family, student's t distribution OR quasi binomial?) -- student's t does not weight as heavily on outliers. Use instead of a normal distribution in gaussian model. Also works for smaller sample sizes.
--  **Results:** When trying quasibinomial, results are significant with log link (though, double check if that is correct because already loged sum_total in the model). 
+-  **Results:** When trying quasibinomial, results are significant with log link (though, double check if that is correct because already logged sum_total in the model). 
 
 ```{r}
 
@@ -313,221 +1141,6 @@ check_model(quasibin_model_noZero) ## some high collinearity
 
 
 ```
-
-
-
-
-## Hypothesis 2b:
--  Using a **general linear model** to plot the residuals of density dependence (Hyp 2a) against silicate to see if survivorship beyond density dependence is being driven by silicate 
--  **Results:** Either with or without the zeros, models are very insignificant. This indicates there is no additional effect of silicate beyond what survivorship is already determined by density dependence. 
-
-```{r}
-################################
-## calculate residuals: plotting the residuals from previous model from hyp 2a against silicate 
-################################
-
-#### with zeroes 
-resid(proportion_alive)
-
-resid_proportionalive <- SettlementDF_Full %>% 
-  bind_cols(residuals = resid(proportion_alive)) 
-
-#### without zeroes
-resid(proportion_alive_noZero)
-
-resid_proportionalive_noZero <- SettlementDF_Full %>% 
-  filter(proportion_alive>0) %>% 
-  bind_cols(residuals = resid(proportion_alive_noZero)) 
-
-#####################
-## models 
-#####################
-
-#### with zeroes 
-
-resids_silicateEffect_model <- lm(residuals ~ silicate_avg*Location, data=resid_proportionalive)
-
-anova(resids_silicateEffect_model) ## very insignificant 
-summary(resids_silicateEffect_model)
-check_model(resids_silicateEffect_model)
-
-#### without zeroes 
-
-resids_silicateEffect_model_noZero <- lm(residuals ~ silicate_avg*Location, data=resid_proportionalive_noZero)
-
-anova(resids_silicateEffect_model_noZero)
-summary(resids_silicateEffect_model_noZero)
-check_model(resids_silicateEffect_model_noZero)
-
-
-#####################
-## plot 
-#####################
-#### plot the residuals (this basically says that whatever points are above the best fit line are surviving more than expected due to density dependence because of SGD, anything below the line is surviving less than expected due to SGD)
-
-#### with zeroes 
-survivorship_silicateEffect <- resid_proportionalive %>% 
-  ggplot(aes(x=silicate_avg, 
-             y=residuals)) +
-  geom_point(size=4, aes(color=Location)) + 
-  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
-                    limits=c("Cabral", "Varari")) +
-  geom_smooth(method="lm", color="black") + 
-  theme_classic() + 
-  labs(x = expression(Silicate~(mu*mol~L^-1)), 
-       y= "Residuals of Alive Settlers") + 
-  theme(axis.text.x=element_text(size=20), 
-        axis.text.y=element_text(size=20), 
-        axis.title.x=element_text(size=20), 
-        axis.title.y=element_text(size=20), 
-        legend.text=element_text(size=20),  # Adjust legend text size
-        legend.title=element_text(size=20), # Adjust legend title size
-        strip.text=element_text(size=20))
-  
-
-survivorship_silicateEffect
-ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Survivorship_SilicateEffect.jpg"), 
-       width=12, height=9)
-
-
-#### without zeroes 
-survivorship_silicateEffect_noZero <- resid_proportionalive_noZero %>% 
-  ggplot(aes(x=silicate_avg, 
-             y=residuals)) +
-  geom_point(size=4, aes(color=Location)) + 
-  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
-                    limits=c("Cabral", "Varari")) +
-  geom_smooth(method="lm", color="black") + 
-  theme_classic() + 
-  labs(x = expression(Silicate~(mu*mol~L^-1)), 
-       y= "Residuals of Alive Settlers") + 
-  theme(axis.text.x=element_text(size=20), 
-        axis.text.y=element_text(size=20), 
-        axis.title.x=element_text(size=20), 
-        axis.title.y=element_text(size=20), 
-        legend.text=element_text(size=20),  # Adjust legend text size
-        legend.title=element_text(size=20), # Adjust legend title size
-        strip.text=element_text(size=20))
-  
-survivorship_silicateEffect_noZero
-ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Survivorship_SilicateEffect_NoZero.jpg"), 
-       width=10, height=9)
-
-```
-
-
-
-## Hypothesis 3:
--  Using a **general linear model** (double check correctness)
--  **Results:**
--  Notes: when remove 0s from percent cover and total alive (though there are quite a few between both sites), you see a pretty strong relationship. The limitation with this hypothesis is that the data previously collected was percent cover data, and we do not have a true density count, so the 0s might not be a true reflection of the actual number of adult corals near the tile. The proportion of alive settlers is also a bit stronger here than just the total number of settlers. 
-
-```{r}
-
-##################
-## models 
-##################
-
-## total alive 
-alive_predict_cover <- lm(percent_cover ~ sum_total_alive*Location, data =SettlementDF_Full)
-
-anova(alive_predict_cover) ## insignificant, though logging makes it WAY better and almost significant (0.06)
-summary(alive_predict_cover)
-
-## proportion alive 
-
-propalive_predict_cover <- lm(percent_cover ~ proportion_alive*Location, data = SettlementDF_Full)
-
-anova(propalive_predict_cover) ## significant 
-summary(propalive_predict_cover)
-
-##################
-## models without ZERO
-##################
-
-## total alive 
-alive_predict_cover_noZero <- lm(percent_cover ~ sum_total_alive*Location, data =SettlementDF_Full %>% 
-                                   filter(percent_cover>0))
-
-anova(alive_predict_cover_noZero) ## significant, better without logging 
-summary(alive_predict_cover_noZero)
-check_model(alive_predict_cover_noZero)
-
-## proportion alive 
-
-propalive_predict_cover_noZero <- lm(percent_cover ~ proportion_alive*Location, data = SettlementDF_Full %>% 
-                                       filter(percent_cover>0))
-
-anova(propalive_predict_cover_noZero) ## very significant 
-summary(propalive_predict_cover_noZero)
-check_model(propalive_predict_cover_noZero)
-
-
-
-##################
-## plots  
-##################
-
-## total alive 
-
-alive_affect_cover <- SettlementDF_Full %>% 
-  filter(percent_cover>0) %>% ## decide whether to keep in or not **
-  ggplot(aes(x=sum_total_alive, 
-             y=percent_cover)) +
-  geom_point(size=4, aes(color=Location)) + 
-  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
-                    limits=c("Cabral", "Varari")) +
-  geom_smooth(method="lm", color="black") + 
-  theme_classic() + 
-  labs(x = "Total Alive Settlers", 
-       y= "Percent Cover of P. acuta adults") + 
-  theme(axis.text.x=element_text(size=20), 
-        axis.text.y=element_text(size=20), 
-        axis.title.x=element_text(size=20), 
-        axis.title.y=element_text(size=20), 
-        legend.text=element_text(size=20),  # Adjust legend text size
-        legend.title=element_text(size=20), # Adjust legend title size
-        strip.text=element_text(size=20))
-
-alive_affect_cover
-
-ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Cover_AliveEffect.jpg"), 
-       width=12, height=9)
-
-
-## proportion alive 
-
-propalive_affect_cover <- SettlementDF_Full %>% 
-  filter(percent_cover>0) %>% 
-  ggplot(aes(x=proportion_alive, 
-             y=percent_cover)) +
-  geom_point(size=4, aes(color=Location)) + 
-  scale_color_manual(values=c("darkgoldenrod2", "firebrick4"), 
-                    limits=c("Cabral", "Varari")) +
-  geom_smooth(method="lm", color="black") + 
-  theme_classic() + 
-  labs(x = "Proportion of Alive Settlers", 
-       y= "Percent Cover of P. acuta adults") + 
-  theme(axis.text.x=element_text(size=20), 
-        axis.text.y=element_text(size=20), 
-        axis.title.x=element_text(size=20), 
-        axis.title.y=element_text(size=20), 
-        legend.text=element_text(size=20),  # Adjust legend text size
-        legend.title=element_text(size=20), # Adjust legend title size
-        strip.text=element_text(size=20))
-
-propalive_affect_cover
-ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Cover_PropAliveEffect.jpg"), 
-       width=12, height=9)
-
-```
-
-
-## Incorporating an SEM? 
-
-
-
-
 
 
 

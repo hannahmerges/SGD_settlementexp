@@ -22,14 +22,19 @@ library(lubridate)
 library(lme4)
 library(lmerTest)
 library(modelsummary)
-library(tidymodels)
-library(flextable)
+#library(tidymodels)
+#library(flextable)
 library(performance)
 library(agricolae)
 library(broom)
 library(stringr)
 library(emmeans)
 library(MuMIn)
+library(betareg)
+library(ggridges)
+library(ggplot2)
+library(viridis)
+library(hrbrthemes)
 ```
 
 ## Load datasets 
@@ -39,7 +44,213 @@ SettlementCount_updated <- read_csv(here::here("Data", "SettlementCounts_edited.
 
 SettlementCount_updated <- SettlementCount_updated %>% 
   filter(settled!=0) #%>% ##dropped one outlier in data where there were 0 counts for everything, so I think no larvae were actually added
+
+### bring in settlement counts and water chem data to get salinity in addition to nutrients (found this file from script: )
+SettlementCount_wsalinity <- read_csv(here::here("Data", "SettlementCounts_edited_wSALINITY.csv"))
+
+SettlementCount_wsalinity <- SettlementCount_wsalinity %>% 
+  filter(settled!=0)
+
 ```
+
+## Tidy the data 
+- adding in proportion of settlement calculations 
+```{r}
+
+SettlementCount_updated <- SettlementCount_updated %>% 
+  dplyr::mutate(proportion_settled = settled/20)
+
+SettlementCount_wsalinity <- SettlementCount_wsalinity %>% 
+  dplyr::mutate(proportion_settled = settled/20)
+
+#SettlementCount_wsalinity_andpH <- SettlementCount_wsalinity %>% 
+  
+
+```
+
+
+## Models for Thesis
+-  Using silicate as the main predictor and using proportions as the response 
+-  **Results:**  Varari is significant, Cabral is not 
+
+```{r}
+
+########################
+## test to make sure there is no sig effect of treatment bin 
+## can then drop it from the model 
+########################
+treatment_bin <- lm(proportion_settled ~ treatment_level*treatmentID_rep, data = SettlementCount_updated %>% 
+                       filter(site=="Cabral"))
+
+anova(treatment_bin)
+check_model(treatment_bin)
+
+######################
+## Varari 
+######################
+
+## does it look okay just logging ? if not, use beta regression
+
+## regular lmer 
+silicate_settlersV <- lmer(log(proportion_settled+1) ~ silicate + (1|date), data = SettlementCount_updated %>% 
+                       filter(site=="Varari"))
+
+anova(silicate_settlersV)
+summary(silicate_settlersV)
+r.squaredGLMM(silicate_settlersV)
+check_model(silicate_settlersV)
+
+######################
+## Cabral 
+######################
+
+silicate_settlersC <- lmer(log(proportion_settled+1) ~ silicate + (1|date), data = SettlementCount_updated %>% 
+                       filter(site=="Cabral"))
+
+anova(silicate_settlersC)
+summary(silicate_settlersC)
+r.squaredGLMM(silicate_settlersC)
+check_model(silicate_settlersC)
+
+
+```
+
+## Basic plots 
+
+```{r}
+######################
+## Varari 
+######################
+
+V_settlersPlot <- SettlementCount_updated %>% 
+  filter(site=="Varari") %>% 
+  ggplot(aes(x=silicate, 
+             y=settled)) + 
+  coord_trans(y="log") +
+  geom_point(size=4, aes(color=treatment_level)) + 
+  geom_smooth(method="lm") + 
+  theme_classic() 
+
+V_settlersPlot
+
+##
+V_proportion_settlers <- SettlementCount_updated %>% 
+  filter(site=="Varari") %>% 
+  ggplot(aes(x=silicate, 
+             y=proportion_settled)) + 
+  coord_trans(y="log") +
+  geom_point(size=4, aes(color=treatment_level)) + 
+  geom_smooth(method="lm", formula='y~x', color="black") + 
+  scale_color_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
+                    limits=c("Ambient", "Low", "Medium", "High"), 
+                    guide="none") +
+  theme_classic() + 
+  coord_cartesian(ylim = c(0, 1)) + 
+  labs(x = expression(Silicate~(mu*mol~L^-1)), 
+       y = "Proportion of Settlers", 
+       color= "Date") + 
+  theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20))
+
+V_proportion_settlers
+ggsave(here::here("Outputs","SettlementExperiment", "Thesis_Figures", "V_settlerprop.jpg"), 
+       width=10, height=7)
+
+
+######################
+## Cabral 
+######################
+
+C_settlersPlot <- SettlementCount_updated %>% 
+  filter(site=="Cabral") %>% 
+  ggplot(aes(x=silicate, 
+             y=settled)) + 
+  coord_trans(y="log") +
+  geom_point() + 
+  geom_smooth(method="lm")
+
+C_settlersPlot
+
+##
+C_settler_prop <- SettlementCount_updated %>% 
+  filter(site=="Cabral") %>% 
+  ggplot(aes(x=silicate, 
+             y=proportion_settled)) + 
+  coord_trans(y="log") +
+  geom_point(size=4, 
+             aes(color=treatment_level)) +
+  scale_color_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
+                    limits=c("Ambient", "Low", "Medium", "High"), 
+                    guide="none") +
+ # geom_smooth(method="lm", formula='y~x', se=FALSE) + 
+  theme_classic() + 
+  coord_cartesian(ylim = c(0, 1)) + 
+  labs(x = expression(Silicate~(mu*mol~L^-1)), 
+       y = "Proportion of Settlers", 
+       color= "Date") + 
+  theme(axis.text.x=element_text(size=20), 
+        axis.text.y=element_text(size=20), 
+        axis.title.x=element_text(size=20), 
+        axis.title.y=element_text(size=20), 
+        legend.text=element_text(size=20),  # Adjust legend text size
+        legend.title=element_text(size=20), # Adjust legend title size
+        strip.text=element_text(size=20))
+
+C_settler_prop
+ggsave(here::here("Outputs","SettlementExperiment", "Thesis_Figures", "C_settlerprop.jpg"), 
+       width=10, height=7)
+
+
+
+C_settler_prop + V_proportion_settlers
+ggsave(here::here("Outputs","SettlementExperiment", "Thesis_Figures", "settlerprop_bothsites.jpg"), 
+       width=14, height=7)
+```
+
+#### Test models with salinity 
+
+```{r}
+SettlementCount_wsalinityV <- SettlementCount_wsalinity %>% 
+  filter(site=="Varari")
+
+max(SettlementCount_wsalinityV$salinity)
+min(SettlementCount_wsalinityV$salinity)
+
+
+
+######################
+## using salinity 
+######################
+
+#### Cabral 
+
+salinity_settlersC <- lmer(log(proportion_settled+1) ~ salinity + (1|date), data = SettlementCount_wsalinity %>% 
+                       filter(site=="Cabral"))
+
+anova(salinity_settlersC)
+
+#### Varari 
+salinity_settlersV <- lmer(log(proportion_settled+1) ~ salinity + (1|date), data = SettlementCount_wsalinity %>% 
+                       filter(site=="Varari"))
+
+anova(salinity_settlersV)
+```
+
+
+
+
+
+
+
+
+
+
+# Experimental Testing (can ignore)
 
 ## Boxplot with jitter 
 
@@ -165,8 +376,6 @@ ggsave(here::here("Outputs","SettlementExperiment","Thesis_Figures","Exp_ViolinP
 
 ```
 
-
-
 ## Models 
 
 ```{r}
@@ -175,15 +384,28 @@ ggsave(here::here("Outputs","SettlementExperiment","Thesis_Figures","Exp_ViolinP
 ## using silicate 
 ######################
 
-silicate_modelV <- lm(log(settled+1) ~ silicate + (1|rep_number), data = SettlementCount_updated %>% 
-                       filter(site=="Varari"))
+silicate_modelV <- lmer(log(settled+1) ~ silicate + (1|date), data = SettlementCount_updated %>% 
+                       filter(site=="Cabral"))
 
 anova(silicate_modelV)
 summary(silicate_modelV)
 r.squaredGLMM(silicate_modelV)
 plot(silicate_modelV)
 
-silicate_modelC <- lm(log(settled+1) ~ silicate + (1|rep_number), data = SettlementCount_updated %>% 
+
+## plot
+
+V_settlers <- SettlementCount_updated %>% 
+  filter(site=="Varari") %>% 
+  ggplot(aes(x=silicate, 
+             y=settled)) + 
+  coord_trans(y="log") +
+  geom_point() + 
+  geom_smooth(method="lm")
+V_settlers
+
+##########################
+silicate_modelC <- lm(log(settled+1) ~ silicate, data = SettlementCount_updated %>% 
                        filter(site=="Cabral"))
 
 anova(silicate_modelC)
@@ -218,6 +440,8 @@ emmeans(treatment_modelC, pairwise~"treatment_level", adjust="Tukey")
 
 
 ```
+
+
 
 
 

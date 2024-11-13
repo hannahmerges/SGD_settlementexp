@@ -48,6 +48,50 @@ RecruitmentCounts2.1 <- read_csv((here::here("Data", "RecruitmentCounts2.1.csv")
 -  c) calcualte percent cover of P. acuta based on total amount of biotics in the area 
 -  Add in 0s for the cowtags that don't have P acuta counts (confirmed with Danielle, August 2024)
 ```{r}
+
+#######################
+## NOVEMBER 7th update 
+######################
+
+Corals <- c("Pocillopora acuta","Porites rus","Montipora verrilli","Montipora setosa","Montipora grisea","Porites irregularis","Porites lobata","Pocillopora verrucosa","Pavona chiriquiensis","Pavona cactus","Leptastrea transversa","Acropora","Acropora pulchra","Montipora capitata")
+
+df_corals <- Poc_cover_data %>% 
+  filter(Taxa %in% Corals, 
+         Location %in% c("Cabral", "Varari")) %>% 
+  filter(Date!="7/19/22"|CowTagID!="C8") %>% 
+  group_by(CowTagID) %>% 
+  summarize(coral_counts = sum(SpeciesCounts)) 
+
+
+df_Pacuta <- Poc_cover_data %>% 
+  filter(Taxa == "Pocillopora acuta", 
+         Location %in% c("Cabral", "Varari")) %>% 
+  filter(Date!="7/19/22"|CowTagID!="C8") %>% 
+  group_by(CowTagID) %>% 
+  summarize(Pacuta_counts = sum(SpeciesCounts)) 
+
+
+Poc_cover_dataedit <- Poc_cover_data %>% 
+  filter(Location %in% c("Cabral", "Varari")) %>% 
+  filter(Date!="7/19/22"|CowTagID!="C8") %>% 
+  group_by(CowTagID) %>% 
+  summarize(total_counts = sum(SpeciesCounts))
+    
+
+full <- Poc_cover_dataedit %>% 
+  left_join(df_Pacuta) %>% 
+  left_join(df_corals) %>% 
+  filter(!CowTagID %in% c("CSEEP","VSEEP")) %>% 
+  mutate(Pacuta_counts = ifelse(is.na(Pacuta_counts), 0, Pacuta_counts), 
+         coral_counts = ifelse(is.na(coral_counts), 0, coral_counts)) %>%
+  mutate(pacuta_cover = (Pacuta_counts/total_counts)*100, 
+         coral_percentcover = (coral_counts/total_counts)*100) %>% 
+  left_join(SettlementDF_Full)
+
+
+
+    #### COME BACK AND CHANGE WITH CORRECT NAME ##########
+    
 Poc_cover_data2 <- Poc_cover_data %>% 
   select(!c("Date", "PhotoNum", "Notes")) %>% 
   filter(Taxa!="Bare Rock",Taxa!="Sand",Taxa!="Rubble", Location!="Varari_Maya") %>% 

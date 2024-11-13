@@ -11,45 +11,17 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ##Load libraries 
 ```{r}
-library(segmented)
-library(plotrix)
 library(gridExtra)
-library(LoLinR)
 library(lubridate)
-library(chron)
 library(patchwork)
 library(tidyverse)
 library(here)
 library(PNWColors)
 library(ggrepel)
 library(reshape2)
-library(viridis)
 library(car)
-library(GGally)
-library(corrplot)
-library(PNWColors)
 library(seacarb)
 library(broom)
-library(calecopal)
-library(ggridges)
-library(agricolae)
-library(lme4)
-library(lmerTest)
-library(modelsummary)
-library(tidymodels)
-library(flextable)
-library(performance)
-library(agricolae)
-library(ggeffects)
-library(sjPlot)
-library(patchwork)
-library(broom)
-library(purrr)
-library(nlstools)
-library(stringr)
-library(emmeans)
-library(MuMIn)
-library(forcats)
 ```
 
 ## load datasets 
@@ -69,7 +41,7 @@ pHSlope<-pHcalib %>%
   nest_by(TrisCalDate)%>%
   mutate(fitpH = list(lm(mVTris~TTris, data = data))) %>% # linear regression of mV and temp of the tris
   summarise(broom::tidy(fitpH)) %>% # make the output tidy
-  select(TrisCalDate, term, estimate) %>%
+  dplyr::select(TrisCalDate, term, estimate) %>%
   pivot_wider(names_from = term, values_from = estimate) %>%# put slope and intercept in their own column
   right_join(.,pHData) %>% # join with the pH sample data
   mutate(mVTris = temp*TTris + `(Intercept)`) %>% # calculate the mV of the tris at temperature in which the pH of samples were measured

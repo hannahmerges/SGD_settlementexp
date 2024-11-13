@@ -1,0 +1,704 @@
+---
+title: "RecruitmentTiles_PrelimAnalysis"
+author: "Hannah Merges"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE)
+```
+
+## Load libraries 
+```{r}
+library(segmented)
+library(plotrix)
+library(gridExtra)
+library(LoLinR)
+library(lubridate)
+library(chron)
+library(patchwork)
+library(tidyverse)
+library(here)
+library(PNWColors)
+library(ggrepel)
+library(reshape2)
+library(viridis)
+library(car)
+library(GGally)
+library(corrplot)
+library(PNWColors)
+library(seacarb)
+library(broom)
+library(calecopal)
+library(ggridges)
+library(agricolae)
+library(lme4)
+library(lmerTest)
+library(modelsummary)
+library(tidymodels)
+library(flextable)
+library(performance)
+library(agricolae)
+library(ggeffects)
+library(sjPlot)
+library(patchwork)
+library(broom)
+library(purrr)
+library(nlstools)
+library(stringr)
+library(emmeans)
+library(MuMIn)
+library(forcats)
+library(ggmap)
+library(maptools)
+library(kriging)
+library(ggnewscale)
+library(wql)
+library(pscl)
+```
+
+## Bring in datasets
+```{r}
+RecruitmentCounts <- read_csv(here("Data","Recruitment_Tiles_Counts.csv"))
+AllChemData <- read_csv("https://raw.githubusercontent.com/njsilbiger/MooreaSGD_site-selection/main/Data/August2021/Allbiogeochemdata_QC.csv")
+PercentCover <- read_csv("https://raw.githubusercontent.com/dbarnas/Community_Functional_Diversity/main/Data/Full_Metadata.csv")
+pH <- read_csv(here("Data", "pHSlope.csv"))
+```
+
+## join dfs 
+```{r}
+
+full_CommunityRecruit <- PercentCover %>% 
+  left_join(RecruitmentCounts, join_by(CowTagID, Location))
+
+full_envdataRecruits <- full_CommunityRecruit %>% 
+  left_join(AllChemData, join_by(Location, CowTagID, lat, lon))
+```
+
+# tidy this now fully complete and joined dataset 
+```{r}
+full_envdataRecruits <- full_envdataRecruits %>% 
+  select(!c("del15N", "adj_CT_depth_cm", "meanRugosity", "Top_Plate_ID", "Bottom_Plate_ID", "Jamie_Plate_ID", "Time", "DateTime", "M_C":"Lignin_Like"))
+
+#full_envdataRecruits <- full_envdataRecruits %>% 
+  #select()
+# should I get rid of extra rows from seeps and rock wall, etc ??? 
+
+```
+
+# group and average the day/night and high/low tide measurements 
+```{r}
+
+full_envdataRecruits2 <- full_envdataRecruits %>% 
+  select(!c("Date", "Tide", "Day_Night", "Plate_Seep")) %>% 
+  group_by(CowTagID) %>% 
+  mutate(avgSal=mean(Salinity, na.rm=TRUE), 
+         avgTemp=mean(Temperature, na.rm=TRUE), 
+         avgTA=mean(TA, na.rm=TRUE), 
+         avgpH=mean(pH, na.rm=TRUE), 
+         avgPhosphate=mean(Phosphate_umolL, na.rm=TRUE), 
+         avgSilicate=mean(Silicate_umolL, na.rm=TRUE),
+         avgNN=mean(NN_umolL, na.rm=TRUE), 
+         avgAmmonia=mean(Ammonia_umolL, na.rm=TRUE))
+
+### not sure if I did this correctly??? maybe I could make this tidier? lots of extra rows due to date, tide, and day/night 
+  
+```
+
+## tidy the df a bit more to start visualizing with plots 
+### mainly pivoting the recruitment counts 
+```{r}
+## pivot dataset and group together 
+Recruits_pivoted <- RecruitmentCounts %>% 
+  group_by(CowTagID, Location, SGD_level, Side) %>% 
+  pivot_longer(cols="Pocilloporidae":"Other", names_to = "recruit_counts") %>% 
+  summarize(sum_total=sum(value)) 
+
+### getting incorrect values if you FULL, joined dataframe because too many rows per CowTag bc of other data -- fix this -- for right now, using just the recruitment count df 
+
+totalcounts_tilelocation <- Recruits_pivoted %>% 
+  pivot_wider(names_from = Side, values_from = sum_total) %>% 
+  mutate(total_count = Bottom + Side + Top) ##R recognizes double quotes as characters, so just add the literal column name 
+
+
+```
+
+## these plots show rough SGD estimate, taken from silicate kriging plot with total recruit counts per plate 
+
+```{r}
+## try to plot basics for Varari 
+### this plot 
+Recruits_by_SGD_level_V <- totalcounts_tilelocation %>% 
+  filter(Location=="Varari") %>% 
+  ggplot(aes(x=reorder(CowTagID, -total_count), 
+             y=total_count, 
+             fill=SGD_level)) + 
+  geom_col() + 
+  theme_blank()  + 
+  scale_fill_manual(values=c("darkseagreen4", "darkgoldenrod2", "coral4"), 
+                    limits=c("Low", "Mid", "High")) + 
+   labs(title="Varari", 
+       x="CowTag_ID", 
+       y="Settler Counts")
+  
+Recruits_by_SGD_level_V
+
+## for Cabral 
+Recruits_by_SGD_level_C <- totalcounts_tilelocation %>% 
+  filter(Location=="Cabral") %>% 
+  ggplot(aes(x=reorder(CowTagID, -total_count), 
+             y=total_count, 
+             fill=SGD_level)) + 
+  geom_col() + 
+  theme_blank() + 
+  scale_fill_manual(values=c("darkseagreen4", "darkgoldenrod2", "coral4"), 
+                    limits=c("Low", "Mid", "High")) + 
+  labs(title="Cabral", 
+       x="CowTag_ID", 
+       y="Settler Counts")
+  
+Recruits_by_SGD_level_C
+
+
+Recruits_by_SGD_level_C + Recruits_by_SGD_level_V
+ggsave(here("Outputs", "RecruitmentTiles", "RecruitbySGDestimates.jpg"), 
+       width = 14, height = 10)
+
+
+### try with SE bars  ?? 
+totalcounts_tilelocation2 <- totalcounts_tilelocation %>% 
+  group_by(SGD_level, CowTagID, Location, total_count) %>% 
+  summarize(mean_recruit = mean(total_count, na.rm=TRUE), 
+            se_recruit = sd(total_count, na.rm=TRUE)/sqrt(n())) %>% 
+  ungroup() 
+ # geom_errorbar(aes(ymin=mean_settled-se_settled, ymax=mean_settled+se_settled), width=0.1) 
+
+
+################################
+### associated models 
+#################################
+
+## trying to run ANOVA to see if there is any significance between treatments and between sites  
+Varari_recruitment <- totalcounts_tilelocation %>% 
+   filter(Site=="Varari")
+
+anova_recruits_Varari <- aov(total_count ~ SGD_level, data=Varari_recruitment)
+summary(anova_recruits_Varari)
+emmeans(anova_recruits_Varari, pairwise~"SGD_level", adjust="Tukey")
+
+Cabral_recruitment <- totalcounts_tilelocation %>% 
+   filter(Site=="Cabral")
+
+anova_recruits_Cabral <- lm(total_count ~ SGD_level, data=Cabral_recruitment) 
+summary(anova_recruits_Cabral)
+emmeans(anova_recruits_Cabral, pairwise~"SGD_level", adjust="Tukey")
+
+anova_recruits <- aov(total_count ~ SGD_level + Site, data=totalcounts_tilelocation)
+summary(anova_recruits)
+emmeans(anova_recruits, pairwise~"SGD_level", adjust="Tukey")
+```
+
+
+## want to look at tile data for each of the env parameters (April 17th, 2024)
+## start with percent cover data 
+### try with a regular barlplot and then stacked barplot because part out of whole 
+```{r}
+
+full_envdataRecruits3 <- full_envdataRecruits2 %>% 
+  pivot_longer(cols = LiveCoral:Sand, names_to = "comm_type", values_to = "percent_cover") %>% 
+  group_by(comm_type, CowTagID, Location) %>% 
+  summarize(percent_total=sum(percent_cover)) 
+  
+full_envdataRecruits4 <- full_envdataRecruits3 %>% 
+  pivot_wider(names_from = CowTagID, values_from = percent_total) 
+
+full_envdataRecruits4 <- full_envdataRecruits4 %>% 
+  select(!starts_with(c("Reef","RockWall","Sand"))) %>% ## gets rid of the extra data that I don't need - columns that start with Reef, Rockwall, or Sand 
+  pivot_longer(cols = C1:VSEEP, names_to = "CowTagID", values_to = "percent_cover") %>% 
+  drop_na(percent_cover)
+
+#### now plot 
+commcomp_plot_V <- full_envdataRecruits4 %>% 
+  filter(Location=="Varari") %>% 
+  ggplot(aes(x=factor(CowTagID, level = c("V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11", "V12", "V13", "V14", "V15", "V16", "V17", "V18", "V19", "V20", "VSEEP")),
+             y=percent_cover,
+             fill=comm_type)) + 
+  geom_bar(position="stack", stat="identity") + 
+  theme_blank() + 
+  scale_fill_manual(values=c("darkolivegreen", "coral", "azure4", "burlywood3"),
+                    limits=c("DeadCoral", "LiveCoral", "Rubble", "Sand")) + 
+  labs(title="Varari", 
+       x="CowTag_ID", 
+       y="% cover of Comm Types") + 
+  theme(axis.text.x = element_text(angle = 45))
+  
+  
+commcomp_plot_V
+
+## for Cabral 
+commcomp_plot_C <- full_envdataRecruits4 %>% 
+  filter(Location=="Cabral") %>% 
+  ggplot(aes(x=factor(CowTagID, level = c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14", "C15", "C16", "C17", "C18", "C19", "C20", "CSEEP")),
+             y=percent_cover,
+             fill=comm_type)) + 
+  geom_bar(position="stack", stat="identity") + 
+  theme_blank() + 
+  scale_fill_manual(values=c("darkolivegreen", "coral", "azure4", "burlywood3"),
+                    limits=c("DeadCoral", "LiveCoral", "Rubble", "Sand")) + 
+  labs(title="Cabral", 
+       x="CowTag_ID", 
+       y="% cover of Comm Types") + 
+  theme(axis.text.x = element_text(angle = 45))
+  
+commcomp_plot_C
+
+
+
+
+commcomp_plot_C + commcomp_plot_V
+
+
+```
+
+## ^^ is way too high for total percentage so trying to fix that here (April 18th, 2024)
+```{r}
+PercentCover <- PercentCover %>% 
+  select(!c("del15N":"N_percent", "adj_CT_depth_cm", "meanRugosity"))
+
+PercentCover2 <- PercentCover %>% 
+  pivot_longer(cols = LiveCoral:Sand, names_to = "comm_type", values_to = "percent_cover") %>% 
+  group_by(comm_type, CowTagID, Location) %>% 
+  summarize(percent_total=sum(percent_cover)) 
+
+PercentCover3 <- PercentCover2 %>% 
+  pivot_wider(names_from = CowTagID, values_from = percent_total) 
+
+PercentCover3 <- PercentCover3 %>% 
+  select(!starts_with(c("Reef","RockWall","Sand"))) %>% ## gets rid of the extra data that I don't need - columns that start with Reef, Rockwall, or Sand 
+  pivot_longer(cols = C1:VSEEP, names_to = "CowTagID", values_to = "percent_cover") %>% 
+  drop_na(percent_cover)
+
+
+```
+ 
+# was successful - now plot normally (April 18th, 2024)
+
+```{r}
+PercentCover_plot_V <- PercentCover3 %>% 
+  filter(Location=="Varari") %>% 
+  ggplot(aes(x=factor(CowTagID, level = c("V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11", "V12", "V13", "V14", "V15", "V16", "V17", "V18", "V19", "V20", "VSEEP")),
+             y=percent_cover,
+             fill=comm_type)) + 
+  geom_bar(position="stack", stat="identity") + 
+  theme_blank() + 
+  scale_fill_manual(values=c("darkolivegreen", "coral", "azure4", "burlywood3"),
+                    limits=c("DeadCoral", "LiveCoral", "Rubble", "Sand")) + 
+  labs(title="Varari", 
+       x="CowTag_ID", 
+       y="% cover of Comm Types") + 
+  theme(axis.text.x = element_text(angle = 45))
+
+PercentCover_plot_V
+
+## for Cabral 
+PercentCover_plot_C <- PercentCover3 %>% 
+  filter(Location=="Cabral") %>% 
+  ggplot(aes(x=factor(CowTagID, level = c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14", "C15", "C16", "C17", "C18", "C19", "C20", "CSEEP")),
+             y=percent_cover,
+             fill=comm_type)) + 
+  geom_bar(position="stack", stat="identity") + 
+  theme_blank() + 
+  scale_fill_manual(values=c("darkolivegreen", "coral", "azure4", "burlywood3"),
+                    limits=c("DeadCoral", "LiveCoral", "Rubble", "Sand")) + 
+  labs(title="Cabral", 
+       x="CowTag_ID", 
+       y="% cover of Comm Types") + 
+  theme(axis.text.x = element_text(angle = 45))
+  
+PercentCover_plot_C
+
+
+PercentCover_plot_C + PercentCover_plot_V
+ggsave(here("Outputs", "RecruitmentTiles", "PercentCommunityCover.jpg"), 
+       width = 14, height = 10)
+
+```
+
+## create a scatterplot to show comm comp data vs total number of recruits on tiles at each of these sites 
+
+```{r}
+
+## need to summarize recruit totals properly and then join with percent cover data and plot 
+RecruitmentCounts2 <- RecruitmentCounts %>% 
+  pivot_longer(cols = Pocilloporidae:Other, names_to = "coral_spp", values_to = "recruit_counts")
+
+RecruitmentCounts3 <- RecruitmentCounts2 %>% 
+  group_by(CowTagID, Location, SGD_level) %>% 
+  summarize(recruit_total= sum(recruit_counts))
+
+CommComp_recruit <- PercentCover3 %>% 
+  left_join(RecruitmentCounts3, join_by(CowTagID, Location))
+
+
+CommComp_recruit_plot <- CommComp_recruit %>%
+  ggplot(aes(x=recruit_total, 
+             y=percent_cover, 
+             fill=factor(comm_type))) +
+  geom_point(size=4, shape=21, color="black") +
+  scale_fill_manual(values=c("darkolivegreen", "coral", "azure4", "burlywood3"),
+                    limits=c("DeadCoral", "LiveCoral", "Rubble", "Sand")) + 
+  facet_wrap(~Location) + 
+  theme_bw() + 
+  labs(x="recruit counts", 
+       y="percent cover of community types", 
+       fill="community types")
+  
+
+CommComp_recruit_plot
+ggsave(here("Outputs", "RecruitmentTiles", "RecruitCounts_by_PercentCover.jpg"), 
+       width = 18, height = 10)
+
+###############################
+## also facet by each CowTag so can isolate specific correlations if there are any  
+################################
+
+CommComp_recruit_plot2V <- CommComp_recruit %>%
+  filter(Location=="Varari") %>% 
+  ggplot(aes(x=recruit_total, 
+             y=percent_cover, 
+             fill=factor(comm_type))) +
+  geom_point(size=4, shape=21, color="black") +
+  scale_fill_manual(values=c("darkolivegreen", "coral", "azure4", "burlywood3"),
+                    limits=c("DeadCoral", "LiveCoral", "Rubble", "Sand")) + 
+  facet_wrap(~CowTagID) + 
+  theme_bw() + 
+  labs(x="recruit counts", 
+       y="percent cover of community types", 
+       fill="community types")
+  
+
+CommComp_recruit_plot2V
+
+###############################
+CommComp_recruit_plot2C <- CommComp_recruit %>%
+  filter(Location=="Cabral") %>% 
+  ggplot(aes(x=recruit_total, 
+             y=percent_cover, 
+             fill=factor(comm_type))) +
+  geom_point(size=4, shape=21, color="black") +
+  scale_fill_manual(values=c("darkolivegreen", "coral", "azure4", "burlywood3"),
+                    limits=c("DeadCoral", "LiveCoral", "Rubble", "Sand")) + 
+  facet_wrap(~CowTagID) + 
+  theme_bw() + 
+  labs(x="recruit counts", 
+       y="percent cover of community types", 
+       fill="community types")
+  
+
+CommComp_recruit_plot2C
+
+```
+
+
+## create a plot to show just total recruit counts on the y axis by CowTag 
+```{r}
+## for Cabral 
+recruit_plot_C <- RecruitmentCounts3 %>% 
+  filter(Location=="Cabral") %>% 
+  ggplot(aes(x=factor(CowTagID, level = c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14", "C15", "C16", "C17", "C18", "C19", "C20")), 
+             y=recruit_total, 
+             fill=CowTagID)) + 
+  geom_bar(position="stack", stat="identity") + 
+  theme_blank() + 
+  labs(title="Cabral", 
+       x="CowTag_ID", 
+       y="Total Recruits per Plate") + 
+  scale_fill_manual(values=rev(pnw_palette("Starfish", n=20)), 
+                     guide="none") +
+  theme(axis.text.x = element_text(angle = 45))
+
+recruit_plot_C
+
+## for Varari 
+recruit_plot_V <- RecruitmentCounts3 %>% 
+  filter(Location=="Varari") %>% 
+  ggplot(aes(x=factor(CowTagID, level = c("V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11", "V12", "V13", "V14", "V15", "V16", "V17", "V18", "V19", "V20")), 
+             y=recruit_total, 
+             fill=CowTagID)) + 
+  geom_bar(position="stack", stat="identity") + 
+  theme_blank() + 
+  labs(title="Varari", 
+       x="CowTag_ID", 
+       y="Total Recruits per Plate") + 
+  scale_fill_manual(values=rev(pnw_palette("Starfish", n=20)), 
+                     guide="none") +
+  theme(axis.text.x = element_text(angle = 45))
+
+recruit_plot_V
+
+recruit_plot_V + recruit_plot_C 
+ggsave(here("Outputs", "RecruitmentTiles", "RecruitCounts.jpg"), 
+       width = 18, height = 10)
+
+
+```
+
+
+## create a new plot where recruit counts are colored by estimated SGD 
+```{r}
+recruit_plot_C2 <- RecruitmentCounts3 %>% 
+  filter(Location=="Cabral") %>% 
+  ggplot(aes(x=factor(CowTagID, level = c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14", "C15", "C16", "C17", "C18", "C19", "C20")), 
+             y=recruit_total, 
+             fill=SGD_level)) + 
+  geom_bar(position="stack", stat="identity") + 
+  theme_blank() + 
+  scale_fill_manual(values=c("darkseagreen4", "darkgoldenrod2", "coral4"), 
+                    limits=c("Low", "Mid", "High")) +
+  labs(title="Cabral", 
+       x="CowTag_ID", 
+       y="Total Recruits per Plate") 
+#  theme(axis.text.x = element_text(angle = 45))
+
+recruit_plot_C2
+
+## for Varari 
+recruit_plot_V2 <- RecruitmentCounts3 %>% 
+  filter(Location=="Varari") %>% 
+  ggplot(aes(x=factor(CowTagID, level = c("V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11", "V12", "V13", "V14", "V15", "V16", "V17", "V18", "V19", "V20")), 
+             y=recruit_total, 
+             fill=SGD_level)) + 
+  geom_bar(position="stack", stat="identity") + 
+  theme_blank() + 
+  labs(title="Varari", 
+       x="CowTag_ID", 
+       y="Total Recruits per Plate") + 
+  scale_fill_manual(values=c("darkseagreen4", "darkgoldenrod2", "coral4"), 
+                    limits=c("Low", "Mid", "High"))
+ # theme(axis.text.x = element_text(angle = 45))
+
+recruit_plot_V2
+
+recruit_plot_V2 + recruit_plot_C2
+ggsave(here("Outputs", "RecruitmentTiles", "RecruitCounts_bySGDest.jpg"), 
+       width = 18, height = 10)
+
+```
+
+
+
+## now try to make a plot that incorporates env data with recruit counts (Arpil 18th, 2024 - UNFINISHED)
+```{r}
+## first join necessary dfs
+
+AllChemData_edit <- AllChemData %>% 
+  select(!c("Top_Plate_ID":"Plate_Seep", "M_C":"Lignin_Like")) 
+  
+AllChemData_edit_avg <- AllChemData_edit %>% 
+  group_by(CowTagID) %>% 
+  summarize(sal_avg = mean(Salinity), 
+            temp_avg = mean(Temperature), 
+            TA_avg = mean(TA), 
+            pH_avg = mean(pH), 
+            phos_avg = mean(Phosphate_umolL), 
+            NN_avg = mean(NN_umolL), 
+            silicate_avg= mean(Silicate_umolL), 
+            ammonia_avg = mean(Ammonia_umolL))
+
+
+CommComp_recruit_envdata <- CommComp_recruit %>% 
+  left_join(AllChemData_edit_avg, join_by(CowTagID))
+
+CommComp_recruit_envdata_long <- CommComp_recruit_envdata %>% 
+  pivot_longer(cols="sal_avg":"ammonia_avg", names_to = "env_params")
+
+######## now plot 
+##### REMOVE SEEP DATA #####
+CommComp_recruit_envdata_plot_C <- CommComp_recruit_envdata_long %>%
+  filter(Location=="Cabral") %>% 
+   drop_na(recruit_total) %>% 
+  ggplot(aes(x=value, 
+             y=log(recruit_total+1))) +
+  geom_point(size=3, shape=21) + 
+  facet_wrap(~env_params, scales = "free") + 
+  theme_bw() + 
+  labs(x="value", 
+       y="recruit counts")
+
+CommComp_recruit_envdata_plot_C
+
+## for Varari 
+CommComp_recruit_envdata_plot_V <- CommComp_recruit_envdata_long %>%
+  #filter(Location=="Varari") %>% 
+   drop_na(recruit_total) %>% 
+  ggplot(aes(x=value, 
+             y=log(recruit_total+1), 
+             color=Location)) +
+  geom_point(size=3, shape=21) + 
+  facet_wrap(Location~env_params, scales = "free") + 
+  theme_bw() + 
+  labs(x="value", 
+       y="recruit counts")
+
+CommComp_recruit_envdata_plot_V
+
+
+## env params just silicate 
+CommComp_recruit_envdata_plot_V2 <- CommComp_recruit_envdata_long %>%
+  filter(env_params=="silicate_avg") %>% 
+  filter(Location=="Varari") %>% 
+   drop_na(recruit_total) %>% 
+  ggplot(aes(x=value, 
+             y=log(recruit_total+1), 
+             color=Location)) +
+  geom_point(size=3, shape=21) + 
+  geom_smooth(method=lm, formula="y~poly(x,2)") + 
+  facet_wrap(~env_params, scales = "free") + 
+  theme_bw() + 
+  labs(x="value", 
+       y="recruit counts")
+CommComp_recruit_envdata_plot_V2
+
+## run a model 
+test_silicatemodelV <- anova(lm(data=CommComp_recruit_envdata_long %>%
+  filter(env_params=="silicate_avg") %>% 
+  filter(Location=="Varari") %>% 
+    drop_na(recruit_total, value),
+  log(recruit_total+1)~poly(value,2)))
+
+check_model(test_silicatemodelV) 
+
+
+
+### trying a bar plot 
+CommComp_recruit_envdata_plot_C2 <- CommComp_recruit_envdata_long %>%
+  filter(Location=="Cabral") %>% 
+  group_by(env_params) %>% 
+  ggplot(aes(x=env_params, 
+             y=recruit_total, 
+             fill=CowTagID)) +
+  geom_bar(position="stack", stat="identity") +
+ # scale_fill_viridis_b() + 
+  theme_bw() + 
+  labs(x="CowTag", 
+       y="recruit counts")
+
+CommComp_recruit_envdata_plot_C2
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+## try to make a PCA for the env data? 
+
+```{r}
+
+# Before we can use this data file, R wants ONLY trait data in order to do the PCA. 
+# (just to get PCA scores).
+AllChemData_edit_avg_PCA <- AllChemData_edit_avg %>% 
+  select(!"CowTagID") %>% 
+  drop_na()
+
+# First, to get all of our traits on the same scale, we'll convert them to z-scores. You don't have to do this, but it is fairly common, and it can be helpful down the line:
+envdata.scale <- scale(AllChemData_edit_avg_PCA, scale=TRUE, center=TRUE)
+
+# Run the PCA with `princomp()`
+PCAmodel <- princomp(envdata.scale, cor=FALSE)
+
+# In princomp, the default is to use the covariance matrix. If you want to use the correlation matrix, then use cor=TRUE Here we converted to z-scores first, so all variables are on the same scale and we can use the covariancematrix. (The correlation matrix is the scaled covariance matrix, recall.)
+
+summary(PCAmodel) 
+
+# This shows amount of variance explained by each axis. It's actually a big wide
+# table, with all 38 principle components. It tells us the amount of variance 
+# explained by each axis, and the cumulative proportion of variance explained
+# Axis 1 will always explain the most variation, Axis 2 the second most, etc.
+
+# We can plot that data easily in a scree plot
+plot(PCAmodel, type="lines")
+
+# Or even prettier:
+library(factoextra)
+fviz_eig(PCAmodel)
+
+PCAmodel$loadings  # Shows the loadings of each trait on each PC 
+# --- make sure you scroll up, this is a long readout. 
+
+PCAmodel$scores # Gives output of the principal components for each individual 
+# on each PC --- another 
+
+# If we want to use the PC scores for something else (maybe we want to use 
+# PC1 to run an ANOVA?), then we can pull out that vector.
+
+PC1 <- PCAmodel$scores[,1] # Pulls out the first column of the table 
+PC1
+
+# And we could run a quick ANOVA to see if guilds differ in PC1 scores. 
+# (This works because the ordering of rows in the PC scores table is the same 
+# as the order in the original data table.)
+AllChemData_edit_avg <- AllChemData_edit_avg %>% 
+  drop_na()
+
+model1 <- lm(PC1~AllChemData_edit_avg$CowTagID)
+anova(model1)
+
+
+# Another common thing to do with PCA is to make a biplot
+biplot(PCAmodel, xlab="PC1", ylab="PC2")
+# The black numbers are each individual spider. The red lines are the vectors 
+# for each trait.
+
+# There are tons of options for playing around with the biplot. I'll just do 
+# this to make this look a bit better so we can see differences among guilds
+
+# I like using ggbiplot
+library(devtools)
+install_github("vqv/ggbiplot") #You only need to download this package once
+
+# In this biplot code, I'm going to separate the spiders by guild (so I need to
+# use my non-subsetted data file). So I use the original file to refer to 
+# guilds, but the PCA data for everything else. I'm also going to put confidence 
+# intervals around the individuals in each guild.
+
+library(ggbiplot)
+
+ggbiplot(PCAmodel, groups=AllChemData_edit_avg$CowTagID, ellipse=TRUE, circle=FALSE) +
+  scale_color_discrete(name='') +
+  geom_point(aes(colour=factor(AllChemData_edit_avg$CowTagID)), size = 1) +
+  theme(legend.direction = 'horizontal', legend.position='bottom', legend.text=element_text(size=8))
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
