@@ -35,7 +35,7 @@ EnvData_wrecruitcounts <- read_csv(here::here("Data", "CommComp_recruit_seasonav
 
 Poc_cover_data <- read_csv(here::here("Data", "Species_Composition_2022_Danielle.csv"))
 
-PercentCover <- read_csv("https://raw.githubusercontent.com/dbarnas/Community_Functional_Diversity/main/Data/Full_Metadata.csv")
+#PercentCover <- read_csv("https://raw.githubusercontent.com/dbarnas/Community_Functional_Diversity/main/Data/Full_Metadata.csv")
 
 PercentCover3 <- read_csv(here::here("Data", "PercentCover3.csv"))
 
@@ -88,12 +88,20 @@ full <- Poc_cover_dataedit %>%
          coral_percentcover = (coral_counts/total_counts)*100) %>% 
   left_join(SettlementDF_Full)
 
+full2 <- full %>% 
+  group_by(Location) %>% 
+  summarize(totalPacuta_site = sum(Pacuta_counts), 
+            totalcoralcover_site = sum(coral_counts))
+
+full3 <- full2 %>% 
+  group_by(Location) %>% 
+  summarize(totalPacuta_site_percent = (totalPacuta_site/totalcoralcover_site)*100)
 
 
     #### COME BACK AND CHANGE WITH CORRECT NAME ##########
     
 Poc_cover_data2 <- Poc_cover_data %>% 
-  select(!c("Date", "PhotoNum", "Notes")) %>% 
+  dplyr::select(!c("Date", "PhotoNum", "Notes")) %>% 
   filter(Taxa!="Bare Rock",Taxa!="Sand",Taxa!="Rubble", Location!="Varari_Maya") %>% 
   group_by(CowTagID) 
 
@@ -125,13 +133,14 @@ EnvData_wPocCover <- EnvData_wrecruitcounts %>%
 ## using Poc data WITH hard substrate and sand etc 
 ###########################################
 Poc_cover_data_withhardsub <- Poc_cover_data %>% 
-  select(!c("Date", "PhotoNum", "Notes")) %>% 
+  dplyr::select(!c("Date", "PhotoNum", "Notes")) %>% 
   filter(Location!="Varari_Maya") %>% 
   group_by(CowTagID) 
   
   
 
 ```
+
 
 ## Look at recruit totals by how many P acuta at the CowTagID
 -  might need to square root the percent cover data bc of the variances (shown in recruits_by_PocCover)

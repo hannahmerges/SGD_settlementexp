@@ -65,6 +65,25 @@ SettlementCount_wsalinity <- SettlementCount_wsalinity %>%
 
 #SettlementCount_wsalinity_andpH <- SettlementCount_wsalinity %>% 
   
+SettlementCount_updated_Cabral <- SettlementCount_updated %>% 
+  filter(site=="Cabral") #%>% 
+  #summarize(meansettled = mean(settled), 
+       #  sesettled = sd(meansettled) / sqrt(n()))
+
+max(SettlementCount_updated_Cabral$proportion_settled)
+min(SettlementCount_updated_Cabral$proportion_settled)
+mean(SettlementCount_updated_Cabral$settled)
+sd(SettlementCount_updated_Cabral$settled) / sqrt(length(SettlementCount_updated_Cabral$settled))
+
+
+SettlementCount_updated_Varari <- SettlementCount_updated %>% 
+  filter(site=="Varari")
+
+max(SettlementCount_updated_Varari$proportion_settled)
+min(SettlementCount_updated_Varari$proportion_settled)
+mean(SettlementCount_updated_Varari$settled)
+sd(SettlementCount_updated_Varari$settled) / sqrt(length(SettlementCount_updated_Varari$settled))
+
 
 ```
 
@@ -76,7 +95,7 @@ SettlementCount_wsalinity <- SettlementCount_wsalinity %>%
 ```{r}
 
 ########################
-## test to make sure there is no sig effect of treatment bin 
+## test to make sure there is no sig effect of treatment bin for either site 
 ## can then drop it from the model 
 ########################
 treatment_bin <- lm(proportion_settled ~ treatment_level*treatmentID_rep, data = SettlementCount_updated %>% 
@@ -92,7 +111,7 @@ check_model(treatment_bin)
 ## does it look okay just logging ? if not, use beta regression
 
 ## regular lmer 
-silicate_settlersV <- lmer(log(proportion_settled+1) ~ silicate + (1|date), data = SettlementCount_updated %>% 
+silicate_settlersV <- lmer(proportion_settled ~ silicate + (1|date), data = SettlementCount_updated %>% 
                        filter(site=="Varari"))
 
 anova(silicate_settlersV)
@@ -104,7 +123,7 @@ check_model(silicate_settlersV)
 ## Cabral 
 ######################
 
-silicate_settlersC <- lmer(log(proportion_settled+1) ~ silicate + (1|date), data = SettlementCount_updated %>% 
+silicate_settlersC <- lmer(proportion_settled ~ silicate + (1|date), data = SettlementCount_updated %>% 
                        filter(site=="Cabral"))
 
 anova(silicate_settlersC)

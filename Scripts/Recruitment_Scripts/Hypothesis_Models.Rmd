@@ -65,7 +65,7 @@ library(devtools)
 library(sjPlot)
 library(effectsize)
 library(marginaleffects)
-
+library(MuMIn)
 ```
 
 
@@ -164,7 +164,6 @@ sd(SettlementDF_FullV$percent_cover) / sqrt(length(SettlementDF_FullV$percent_co
 
 ```
 
-
 #### Plot for the breakdown of coral genera on the tiles - old 
 ```{r}
 
@@ -217,7 +216,7 @@ CoralGenera_Tiles_edit2 <- CoralGenera_Tiles_editC %>%
 ########################################
 
 coral_generaplot1 <- CoralGenera_Tiles_edit2 %>% 
-  mutate(grp = factor(coral_genera, levels = c("Acroporidae","Poritidae","Other","Pocilloporidae"))) %>% # put the levels in an order I want for plotting
+  mutate(grp = factor(coral_genera, levels = c("Other","Acroporidae","Poritidae","Pocilloporidae"))) %>% # put the levels in an order I want for plotting
   ggplot(aes(x=Location, 
              y=percent, 
              fill=grp)) + 
@@ -226,11 +225,11 @@ coral_generaplot1 <- CoralGenera_Tiles_edit2 %>%
                   #  ymax = mean_percentage + se), 
                # width = 0.2, position = position_dodge(0.7)) +  # Add error bars
   theme_classic() + 
-  scale_fill_manual(values=c("coral2", "chocolate4", "gray", "burlywood"), 
-                    limits=c("Acroporidae", "Poritidae", "Other", "Pocilloporidae")) +
+  scale_fill_manual(values=c("gray", "coral2", "chocolate4", "burlywood"), 
+                    limits=c("Other", "Acroporidae", "Poritidae", "Pocilloporidae")) +
   labs(x = "Location", 
        y= "Percentage of Total Settlers", 
-       fill= "Coral Genera") + 
+       fill= "Coral Family") + 
   theme(axis.text.x=element_text(size=20), 
         axis.text.y=element_text(size=20), 
         axis.title.x=element_text(size=20), 
@@ -325,6 +324,7 @@ sd(fullC$sum_total_alive) / sqrt(length(fullC$sum_total_alive))
 -  Why separate it into 2 models? Because too many variables at play, and silicate & percent cover are too highly correlated 
 -  Explanatory values are independent of the family... but they sometimes have to be logged or transformed if you have issues with your residuals being normal in your check model
 
+
 ### models 
 -  logged percent cover 
 ```{r}
@@ -338,7 +338,7 @@ sd(fullC$sum_total_alive) / sqrt(length(fullC$sum_total_alive))
 PocCover_negbinom_old <- glm.nb(sum_total ~ log(percent_cover+1)*Location, data=SettlementDF_Full)
 
 PocCover_negbinom_new <- glm.nb(sum_total ~ log(pacuta_cover+1)*Location, data=full)
-anova(PocCover_negbinom_new)
+anova(PocCover_negbinom_old)
 summary(PocCover_negbinom)  
 ## AIC = 341.62
 r.squaredGLMM(PocCover_negbinom)
@@ -354,6 +354,60 @@ summary(SGD_negbinom)
 ## AIC = 355.44
 check_model(SGD_negbinom)
 
+
+############
+#### September 13th, 2025: Check for collinearity between silicate and percent cover 
+############
+both_factors_collin <- glm.nb(sum_total+1 ~ ((silicate_avg) + I(silicate_avg^2)) + log(percent_cover+1)*Location, data=SettlementDF_Full)
+
+cor(SettlementDF_Full$silicate_avg, SettlementDF_Full$percent_cover)
+
+
+anova(both_factors_collin) 
+summary(both_factors_collin)
+check_model(both_factors_collin)
+
+#### run models separately - remove site as interaction term 
+
+#### Varari models 
+
+#percent cover 
+PocCover_V <- glm.nb(sum_total ~ log(percent_cover+1), data=SettlementDF_Full %>% 
+                                  dplyr::filter(Location=="Varari"))
+
+
+anova(PocCover_V) ## p = 0.037
+summary(PocCover_V)
+check_model(PocCover_V)
+
+#SGD 
+SGD_V <- glm.nb(sum_total+1 ~ ((silicate_avg) + I(silicate_avg^2)), data=SettlementDF_Full %>% 
+                                  dplyr::filter(Location=="Varari"))
+
+
+anova(SGD_V) ## p = 0.006 for linear, 0.005 for polynomial- lots of collinearity 
+summary(SGD_V)
+check_model(SGD_V)
+
+#### Cabral models 
+
+#percent cover 
+PocCover_C <- glm.nb(sum_total ~ log(percent_cover+1), data=SettlementDF_Full %>% 
+                                  dplyr::filter(Location=="Cabral"))
+
+
+anova(PocCover_C) ## p = 0.02
+summary(PocCover_C)
+check_model(PocCover_C)
+
+#SGD 
+SGD_C <- glm.nb(sum_total+1 ~ ((silicate_avg) + I(silicate_avg^2)), data=SettlementDF_Full %>% 
+                                  dplyr::filter(Location=="Cabral"))
+
+
+anova(SGD_C) ## p = 0.38 for linear, 0.8 for polynomial 
+summary(SGD_C)
+check_model(SGD_C) # high collinearity 
 ```
 
 ### neg binomial plots 
@@ -368,8 +422,10 @@ check_model(SGD_negbinom)
 #### Percent Cover 
 #########################
 
-PocCover_negbinom ## model 
 PocCover_negbinom <- glm.nb(sum_total ~ percent_cover*Location, data=SettlementDF_Full)
+PocCover_negbinom ## model 
+
+anova(PocCover_negbinom)
 summary(PocCover_negbinom)
 
 ######## plot 4  --> doesn't have predicted data in there though 
@@ -398,14 +454,15 @@ test4_percentcover_predplot <- ggplot() +
  coord_cartesian(ylim = c(0, 250)) + 
   theme_classic() + 
   labs(x="Percent Cover of Adults", 
-       y="Sum Total of Settlers Present on Tiles") + 
-      theme(axis.text.x=element_text(size=20), 
-        axis.text.y=element_text(size=20), 
-        axis.title.x=element_text(size=20), 
-        axis.title.y=element_text(size=20), 
-        legend.text=element_text(size=20),  # Adjust legend text size
-        legend.title=element_text(size=20), # Adjust legend title size
-        strip.text=element_text(size=20))
+       y="Total Settlers Present on Tiles") + 
+      theme(axis.text.x=element_text(size=40), 
+        axis.text.y=element_text(size=40), 
+        axis.title.x=element_text(size=40), 
+        axis.title.y=element_text(size=30), 
+        legend.text=element_text(size=40),  # Adjust legend text size
+        legend.title=element_text(size=40), # Adjust legend title size
+        strip.text=element_text(size=40)) + 
+  guides(color="none")
 
 
 test4_percentcover_predplot
@@ -438,7 +495,7 @@ SGD_V_glmnbPlot <- ggplot() +
              method = "glm.nb", formula = "y~poly(x,2)", color="black", alpha=0.5) + 
   theme_classic() + 
   labs(x = expression(Average~Silicate~(mu*mol~L^-1)), 
-       y="Sum Total of Settlers Present on Tiles") + 
+       y="Total Settlers Present on Tiles") + 
     theme(axis.text.x=element_text(size=40), 
         axis.text.y=element_text(size=40), 
         axis.title.x=element_text(size=40), 
@@ -468,7 +525,7 @@ SGD_C_glmnbPlot <- ggplot() +
           #   method = "glm.nb", formula = "y~poly(x,2)", color="black", alpha=0.5) + 
   theme_classic() + 
   labs(x = expression(Average~Silicate~(mu*mol~L^-1)), 
-       y="Sum Total of Settlers Present on Tiles") + 
+       y="Total Settlers Present on Tiles") + 
     theme(axis.text.x=element_text(size=40), 
         axis.text.y=element_text(size=40), 
         axis.title.x=element_text(size=40), 
@@ -649,12 +706,12 @@ check_model(resids_silicateEffect_model_noZero)
 
 #### with zeroes 
 survivorship_silicateEffectC <- resid_proportionalive %>% 
-  filter(Location=="Cabral") %>% 
+  filter(Location=="Varari") %>% 
   ggplot(aes(x=silicate_avg, 
              y=residuals)) +
   geom_point(size=4, color= "darkgoldenrod3") + 
 #  scale_color_manual(values="firebrick4") +
-  #geom_smooth(method="lm", formula = "y~poly(x,2)", color="black") + 
+  geom_smooth(method="lm", formula = "y~poly(x,2)", color="black") + 
   theme_classic() + 
   labs(x = expression(Silicate~(mu*mol~L^-1)), 
        y= "Residuals") + 

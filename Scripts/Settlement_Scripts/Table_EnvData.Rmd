@@ -10,8 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Load libraries 
-```{r}
-
+```{r, echo=FALSE, message=FALSE}
 library(tidyverse)
 library(here)
 library(kableExtra)
@@ -23,7 +22,6 @@ library(hrbrthemes)
 library(magick)
 
 ```
-
 
 ## Read in Data 
 ```{r, echo=FALSE, message=FALSE}
@@ -48,6 +46,8 @@ AllChemData_August <- read_csv("https://raw.githubusercontent.com/njsilbiger/Moo
 AllChemData_March <- read_csv("https://raw.githubusercontent.com/njsilbiger/MooreaSGD_site-selection/main/Data/March2022/Allbiogeochemdata_QC_march_fdom2.csv")
 
 ```
+
+
 # Settlement Experiment 
 ## Create table with environmental data 
 ```{r}
@@ -173,7 +173,7 @@ modTable2_edit <- modTable2 %>%
          #AvgTotalAlkalinity = "Avg Total Alkalinity", 
          AvgSalinity = "Avg Salinity", 
          AvgpH = "Avg pH") %>% 
-  dplyr::filter(treatment_level=="Raw GW"|treatment_level=="Ambient") %>% 
+ # dplyr::filter(treatment_level=="Raw GW"|treatment_level=="Ambient") %>% 
   group_by(Location, treatment_level) %>% 
   summarize(meantemp = mean(AvgTemp), 
             meanphos = mean(AvgPhosphate), 
@@ -618,6 +618,7 @@ InsituEnvData_Table <- full_envdataRecruits_avgseason2 %>%
   column_spec(1:6, background = "white")
 
 InsituEnvData_Table
+
 InsituEnvData_Table %>% 
   as_image(file = here("Outputs", "RecruitmentTiles", "Thesis_Figures", "InsituEnvData_Table.jpg"))
 
@@ -630,18 +631,42 @@ full_envdataRecruits_avgseason3 <- full_envdataRecruits_avgseason %>%
   dplyr::select(!c("Date", "Tide", "Day_Night")) %>% 
   filter(!CowTagID %in% c("CSEEP","VSEEP","Reef_Ambient_1","Reef_Ambient_2","Reef_Ambient_3","Reef_SGD_1","Reef_SGD_2", "Reef_SGD_3","Sand_Ambient_1","Sand_Ambient_2","Sand_Ambient_3","Sand_SGD_1","Sand_SGD_2","RockWall_SGD_1", "RockWall_SGD_2", "RockWall_SGD_3")) %>% 
   group_by(Location) %>% 
-  dplyr::summarise('Mean Salinity'=mean(Salinity, na.rm=TRUE), 
-                   'SE Salinity' = sd(Salinity) / sqrt(length(Salinity)), 
-                   'Min Salinity' = min(Salinity, na.rm=TRUE), 
-                   'Mean pH'=mean(pH, na.rm=TRUE),
-                   'SE pH' = sd(pH) / sqrt(length(pH)), 
-                   'Min pH' = min(pH, na.rm=TRUE),
-                   'Mean Silicate'=mean(Silicate_umolL, na.rm=TRUE),
-                   'SE Silicate' = sd(Silicate_umolL) / sqrt(length(Silicate_umolL)), 
-                   'Min Silicate'=min(Silicate_umolL, na.rm=TRUE), 
-                   'Mean NN'=mean(NN_umolL, na.rm=TRUE), 
-                   'SE NN' = sd(NN_umolL) / sqrt(length(NN_umolL)),
-                   'Min NN' = min(NN_umolL, na.rm=TRUE))  
+  dplyr::summarise(MeanSalinity= mean(Salinity, na.rm=TRUE), 
+                   SESalinity = sd(Salinity, na.rm = TRUE) / sqrt(sum(!is.na(Salinity))),
+                   MinSalinity = min(Salinity, na.rm=TRUE), 
+                   MeanpH =mean(pH, na.rm=TRUE),
+                   SEpH = sd(pH, na.rm = TRUE) / sqrt(sum(!is.na(pH))),
+                   MinpH = min(pH, na.rm=TRUE),
+                   MeanSilicate =mean(Silicate_umolL, na.rm=TRUE),
+                   SESilicate = sd(Silicate_umolL, na.rm = TRUE) / sqrt(sum(!is.na(Silicate_umolL))),
+                   MinSilicate =min(Silicate_umolL, na.rm=TRUE), 
+                   MeanNN =mean(NN_umolL, na.rm=TRUE), 
+                   SENN = sd(NN_umolL, na.rm = TRUE) / sqrt(sum(!is.na(NN_umolL))), 
+                   MinNN = min(NN_umolL, na.rm=TRUE)) %>% 
+  mutate(MeanSalinity = round(MeanSalinity, 2), 
+         SESalinity = round(SESalinity, 2), 
+         MinSalinity = round(MinSalinity, 2), 
+         MeanpH = round(MeanpH, 2), 
+         SEpH = round(SEpH, 2), 
+         MinpH = round(MinpH, 2), 
+         MeanSilicate = round(MeanSilicate, 2), 
+         SESilicate = round(SESilicate, 2), 
+         MinSilicate = round(MinSilicate, 2), 
+         MeanNN = round(MeanNN, 2), 
+         SENN = round(SENN, 2), 
+         MinNN = round(MinNN, 2)) %>% 
+  rename('Mean Salinity'= MeanSalinity, 
+         'SE Salinity' = SESalinity, 
+         'Min Salinity' = MinSalinity, 
+         'Mean pH'= MeanpH, 
+         'SE pH' = SEpH, 
+         'Min pH' = MinpH, 
+         'Mean Silicate' = MeanSilicate, 
+         'SE Silicate' = SESilicate,  
+         'Min Silicate' = MinSilicate, 
+         'Mean NN' = MeanNN, 
+         'SE NN' = SENN, 
+         'Min NN' = MinNN) 
 
 #####################################
 ## make a table   
@@ -649,13 +674,88 @@ full_envdataRecruits_avgseason3 <- full_envdataRecruits_avgseason %>%
 InsituEnvData_Table2 <- full_envdataRecruits_avgseason3 %>%
  #arrange(CowTagID) %>% 
   kbl() %>%
-  kable_classic(html_font = "Times New Roman", font_size = 14) %>%
+  kable_classic(html_font = "Times New Roman", font_size = 20) %>%
   row_spec(0, italic = TRUE, bold = TRUE) %>%
  #pack_rows("Cabral", 1, 20) %>%
  # pack_rows("Varari", 21, 40) %>%
   column_spec(1:6, background = "white")
 
 InsituEnvData_Table2
+
+InsituEnvData_Table2 %>% 
+  as_image(file = here("Outputs", "RecruitmentTiles", "Thesis_Figures", "InsituEnvData_Table_WholeSite.jpg"))
+
+
+#####################################
+## JUST doing range    
+#####################################
+Min_Max_WholeSite <- full_envdataRecruits_avgseason %>% 
+  dplyr::select(!c("Date", "Tide", "Day_Night")) %>% 
+  filter(!CowTagID %in% c("CSEEP","VSEEP","Reef_Ambient_1","Reef_Ambient_2","Reef_Ambient_3","Reef_SGD_1","Reef_SGD_2", "Reef_SGD_3","Sand_Ambient_1","Sand_Ambient_2","Sand_Ambient_3","Sand_SGD_1","Sand_SGD_2","RockWall_SGD_1", "RockWall_SGD_2", "RockWall_SGD_3")) %>% 
+  group_by(Location) %>% 
+  dplyr::summarise(MinSalinity = min(Salinity, na.rm=TRUE),
+                   MaxSalinity = max(Salinity, na.rm=TRUE),
+                   MinpH = min(pH, na.rm=TRUE),
+                   MaxpH = max(pH, na.rm=TRUE),
+                   MinSilicate =min(Silicate_umolL, na.rm=TRUE), 
+                   MaxSilicate =max(Silicate_umolL, na.rm=TRUE),
+                   MinNN = min(NN_umolL, na.rm=TRUE), 
+                   MaxNN = max(NN_umolL, na.rm=TRUE),
+                   MinPhosphate = min(Phosphate_umolL, na.rm=TRUE),
+                   MaxPhosphate = max(Phosphate_umolL, na.rm=TRUE)) %>% 
+  mutate(MinSalinity = round(MinSalinity, 2),
+         MaxSalinity = round(MaxSalinity, 2),
+         MinpH = round(MinpH, 2),
+         MaxpH = round(MaxpH, 2),
+         MinSilicate = round(MinSilicate, 2),
+         MaxSilicate = round(MaxSilicate, 2),
+         MinNN = round(MinNN, 2),
+         MaxNN = round(MaxNN, 2),
+         MinPhosphate = round(MinPhosphate, 2),
+         MaxPhosphate = round(MaxPhosphate, 2)) %>% 
+  rename('Min Salinity'= MinSalinity, 
+         'Max Salinity' = MaxSalinity, 
+         'Min pH' = MinpH, 
+         'Max pH'= MaxpH, 
+         'Min Silicate' = MinSilicate, 
+         'Max Silicate' = MaxSilicate, 
+         'Min Nitrate' = MinNN, 
+         'Max Nitrate' = MaxNN,  
+         'Min Phosphate' = MinPhosphate, 
+         'Max Phosphate' = MaxPhosphate) %>% 
+  pivot_longer(cols = c("Min Salinity":"Max Phosphate"), names_to = c("Parameter", ".value"), names_pattern = "(Salinity|pH|Silicate|Nitrate|Phosphate) (.+)") 
+
+
+#####################################
+## make a table   
+#####################################
+
+Min_Max_WholeSite2 <- tribble(~SourceWater, ~Parameter, ~Minimum, ~Maximum,
+                             "Cabral", "Salinity (psu)", "35.3", "36.70", 
+                             "Varari", "Salinity (psu)", "36.0", "37.05", 
+                             "Cabral", "pH", "7.71", "8.1", 
+                             "Varari", "pH", "7.90", "8.1", 
+                             "Cabral", "Silicate (µmol L⁻¹)", "0.88", "15.83", 
+                             "Varari", "Silicate (µmol L⁻¹)", "0.65", "8.28",
+                             "Cabral", "Nitrate (µmol L⁻¹)", "0.03", "2.52", 
+                             "Varari", "Nitrate (µmol L⁻¹)", "0.07", "1.34",
+                             "Cabral", "Phosphate (µmol L⁻¹)", "0.07", "0.29", 
+                             "Varari", "Phosphate (µmol L⁻¹)", "0.11", "0.31")
+                             
+  
+Min_Max_WholeSite_table <- Min_Max_WholeSite2 %>%
+ #arrange(CowTagID) %>% 
+  kbl() %>%
+  kable_classic(html_font = "Times New Roman", font_size = 20) %>%
+  row_spec(0, italic = TRUE, bold = TRUE) #%>%
+ #pack_rows("Cabral", 1, 20) %>%
+ # pack_rows("Varari", 21, 40) %>%
+ # column_spec(1:10, background = "white")
+
+Min_Max_WholeSite_table
+
+Min_Max_WholeSite_table %>% 
+  as_image(file = here("Outputs", "RecruitmentTiles", "Thesis_Figures", "Min_Max_WholeSite_table.jpg"))
 
 
 
