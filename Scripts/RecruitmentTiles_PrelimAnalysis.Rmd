@@ -490,7 +490,7 @@ ggsave(here("Outputs", "RecruitmentTiles", "RecruitCounts_bySGDest.jpg"),
 
 
 
-## now try to make a plot that incorporates env data with recruit counts (Arpil 18th, 2024 - UNFINISHED)
+## now try to make a plot that incorporates env data with recruit counts
 ```{r}
 ## first join necessary dfs
 

@@ -34,7 +34,7 @@ library(betareg)
 library(ggridges)
 library(ggplot2)
 library(viridis)
-library(hrbrthemes)
+#library(hrbrthemes)
 ```
 
 ## Load datasets 
@@ -160,7 +160,7 @@ V_proportion_settlers <- SettlementCount_updated %>%
   coord_trans(y="log") +
   geom_point(size=4, aes(color=treatment_level)) + 
   geom_smooth(method="lm", formula='y~x', color="black") + 
-  scale_color_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
+  scale_color_manual(values=c("steelblue1", "springgreen4", "darkorange", "salmon4"), 
                     limits=c("Ambient", "Low", "Medium", "High"), 
                     guide="none") +
   theme_classic() + 
@@ -203,7 +203,7 @@ C_settler_prop <- SettlementCount_updated %>%
   coord_trans(y="log") +
   geom_point(size=4, 
              aes(color=treatment_level)) +
-  scale_color_manual(values=c("deepskyblue", "darkseagreen", "darkgoldenrod3", "coral3"), 
+  scale_color_manual(values=c("steelblue1", "springgreen4", "darkorange", "salmon4"), 
                     limits=c("Ambient", "Low", "Medium", "High"), 
                     guide="none") +
  # geom_smooth(method="lm", formula='y~x', se=FALSE) + 
@@ -227,7 +227,7 @@ ggsave(here::here("Outputs","SettlementExperiment", "Thesis_Figures", "C_settler
 
 
 C_settler_prop + V_proportion_settlers
-ggsave(here::here("Outputs","SettlementExperiment", "Thesis_Figures", "settlerprop_bothsites.jpg"), 
+ggsave(here::here("Outputs","Publication", "settlement_exp_bothsites.jpg"), 
        width=14, height=7)
 ```
 

@@ -76,10 +76,13 @@ library(MuMIn)
 
 SettlementDF_Full <- read_csv(here::here("Data", "EnvData_wPocCover.csv"))
 ## FULL dataset with pocillopora cover data, env data (nuts, etc), and recruitment counts 
+## CommComp --> EnvDataPocCover 
 
 CoralGenera_Tiles <- read_csv(here::here("Data", "Recruitment_Tiles_Counts.csv")) 
 
 Poc_cover_data <- read_csv(here::here("Data", "Species_Composition_2022_Danielle.csv"))
+
+full <- read_csv((here::here("Data", "full.csv")))
 
 
 #### tidy the data 
@@ -93,8 +96,8 @@ SettlementDF_Full <- SettlementDF_Full %>%
 ##################################
 ## what is overall % survivorship? 
 ##################################
-mean(SettlementDF_FullC$proportion_alive)
-mean(SettlementDF_FullV$proportion_alive)
+#mean(SettlementDF_FullC$proportion_alive)
+#mean(SettlementDF_FullV$proportion_alive)
 
 
 ## is this significant? 
@@ -250,6 +253,8 @@ ggsave(here::here("Outputs", "RecruitmentTiles", "Thesis_Figures", "coral_genera
 -  dataframe "full" is coming from Poc_Cover_data script
 ```{r}
 
+
+
 fullC <- full %>% 
   filter(Location=="Cabral")
 
@@ -323,6 +328,7 @@ sd(fullC$sum_total_alive) / sqrt(length(fullC$sum_total_alive))
 
 -  Why separate it into 2 models? Because too many variables at play, and silicate & percent cover are too highly correlated 
 -  Explanatory values are independent of the family... but they sometimes have to be logged or transformed if you have issues with your residuals being normal in your check model
+
 
 
 ### models 
@@ -930,8 +936,8 @@ check_model(salavg_negbinom) ##
 #### Total spp coverage 
 ```{r}
 Poc_cover_data_edit2 <- Poc_cover_data %>% 
-  select(!c("Date", "PhotoNum", "Notes")) %>% 
-  filter(Taxa!="Bare Rock",Taxa!="Sand",Taxa!="Rubble", Location!="Varari_Maya") %>% 
+  dplyr::select(!c("Date", "PhotoNum", "Notes")) %>% 
+  dplyr::filter(Taxa!="Bare Rock",Taxa!="Sand",Taxa!="Rubble", Location!="Varari_Maya") %>% 
   group_by(CowTagID) 
 
 Poc_cover_data_edit3 <- Poc_cover_data_edit2 %>% 

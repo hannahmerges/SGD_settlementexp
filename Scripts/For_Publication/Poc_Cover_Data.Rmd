@@ -42,6 +42,9 @@ PercentCover3 <- read_csv(here::here("Data", "PercentCover3.csv"))
 RecruitmentCounts2.1 <- read_csv((here::here("Data", "RecruitmentCounts2.1.csv")))
 ```
 
+## December, 2025: 
+
+
 ## Tidy data and join in Danielle's Poc cover data 
 -  a) filter out the sand and hard substrate categories and 
 -  b) sum the totals by cowtagid to get percent cover of the biotics 
@@ -50,11 +53,12 @@ RecruitmentCounts2.1 <- read_csv((here::here("Data", "RecruitmentCounts2.1.csv")
 ```{r}
 
 #######################
-## NOVEMBER 7th update 
+## NOVEMBER 7th, 2024 update 
 ######################
 
 Corals <- c("Pocillopora acuta","Porites rus","Montipora verrilli","Montipora setosa","Montipora grisea","Porites irregularis","Porites lobata","Pocillopora verrucosa","Pavona chiriquiensis","Pavona cactus","Leptastrea transversa","Acropora","Acropora pulchra","Montipora capitata")
 
+## creating df of just corals using Danielle's df + new "Corals" only df 
 df_corals <- Poc_cover_data %>% 
   filter(Taxa %in% Corals, 
          Location %in% c("Cabral", "Varari")) %>% 
@@ -62,63 +66,45 @@ df_corals <- Poc_cover_data %>%
   group_by(CowTagID) %>% 
   summarize(coral_counts = sum(SpeciesCounts)) 
 
-
+## filtering out just P. acuta 
 df_Pacuta <- Poc_cover_data %>% 
   filter(Taxa == "Pocillopora acuta", 
          Location %in% c("Cabral", "Varari")) %>% 
   filter(Date!="7/19/22"|CowTagID!="C8") %>% 
   group_by(CowTagID) %>% 
-  summarize(Pacuta_counts = sum(SpeciesCounts)) 
+  summarize(Pacuta_counts = sum(SpeciesCounts)) ## getting a column of just P acuta counts 
 
 
-Poc_cover_dataedit <- Poc_cover_data %>% 
-  filter(Location %in% c("Cabral", "Varari")) %>% 
-  filter(Date!="7/19/22"|CowTagID!="C8") %>% 
-  group_by(CowTagID) %>% 
-  summarize(total_counts = sum(SpeciesCounts))
+#Poc_cover_dataedit <- Poc_cover_data %>% 
+  #filter(Location %in% c("Cabral", "Varari")) %>% 
+ # filter(Date!="7/19/22"|CowTagID!="C8") %>% ##filtering out 7/19/22 bc focused only on 6/25 ?? and C8 bc ??? (coming back Dec 2025)
+ # group_by(CowTagID) %>% 
+ # summarize(total_counts = sum(SpeciesCounts)) ## getting total species counts including Poc and all other spp per CowTagID BUT STILL HAS DATE AND COWTAGID C8 IN DF 
     
 
-full <- Poc_cover_dataedit %>% 
-  left_join(df_Pacuta) %>% 
-  left_join(df_corals) %>% 
-  filter(!CowTagID %in% c("CSEEP","VSEEP")) %>% 
-  mutate(Pacuta_counts = ifelse(is.na(Pacuta_counts), 0, Pacuta_counts), 
-         coral_counts = ifelse(is.na(coral_counts), 0, coral_counts)) %>%
-  mutate(pacuta_cover = (Pacuta_counts/total_counts)*100, 
-         coral_percentcover = (coral_counts/total_counts)*100) %>% 
-  left_join(SettlementDF_Full)
-
-full2 <- full %>% 
-  group_by(Location) %>% 
-  summarize(totalPacuta_site = sum(Pacuta_counts), 
-            totalcoralcover_site = sum(coral_counts))
-
-full3 <- full2 %>% 
-  group_by(Location) %>% 
-  summarize(totalPacuta_site_percent = (totalPacuta_site/totalcoralcover_site)*100)
-
-
-    #### COME BACK AND CHANGE WITH CORRECT NAME ##########
-    
+## filtering out sand, bare rock, rubble, and maya's locations so that left with just living orgs 
 Poc_cover_data2 <- Poc_cover_data %>% 
   dplyr::select(!c("Date", "PhotoNum", "Notes")) %>% 
   filter(Taxa!="Bare Rock",Taxa!="Sand",Taxa!="Rubble", Location!="Varari_Maya") %>% 
   group_by(CowTagID) 
 
+## getting species count for all biotic orgs 
 Poc_cover_data3 <- Poc_cover_data2 %>% 
   dplyr::summarise(total_count_biotics = sum(SpeciesCounts)) %>% 
   filter(CowTagID!="VSEEP") ## missing C14 
 
+## getting just P acuta counts 
+## NOTE: not all CowTagID have P acuta present 
 Poc_cover_data4 <- Poc_cover_data2 %>% 
   filter(Taxa=="Pocillopora acuta") %>% 
   group_by(CowTagID) %>% 
   mutate(SpeciesCounts_Poc = SpeciesCounts) %>% 
   dplyr::select(!SpeciesCounts)
  
-### joins correlated biotics counts for that CowTag -- still with missing cowtags without P acuta data 
+### joins correlated biotics counts for that CowTag -- only has CowTagIDs with P. acuta, missing data from CowTags without P. acuta  
 Poc_cover_data5 <- Poc_cover_data4 %>% 
   left_join(Poc_cover_data3) %>% 
-  group_by(CowTagID, Location, SpeciesCounts_Poc,total_count_biotics ) %>% 
+  group_by(CowTagID, Location, SpeciesCounts_Poc,total_count_biotics) %>% 
   dplyr::summarise(percent_cover = (SpeciesCounts_Poc/total_count_biotics)*(100)) 
 
 ##########################################
@@ -137,7 +123,29 @@ Poc_cover_data_withhardsub <- Poc_cover_data %>%
   filter(Location!="Varari_Maya") %>% 
   group_by(CowTagID) 
   
-  
+###########################
+## creating "full" datatset combining all the necessary info for env parameters, settlement counts, percent cover of adult coral, etc
+###########################
+
+#full <- Poc_cover_dataedit %>% 
+#  left_join(df_Pacuta) %>% 
+#  left_join(df_corals) %>% 
+#  filter(!CowTagID %in% c("CSEEP","VSEEP")) %>% 
+ # mutate(Pacuta_counts = ifelse(is.na(Pacuta_counts), 0, Pacuta_counts), 
+      #   coral_counts = ifelse(is.na(coral_counts), 0, coral_counts)) %>%
+ # mutate(pacuta_cover = (Pacuta_counts/total_counts)*100, 
+     #    coral_percentcover = (coral_counts/total_counts)*100) %>% 
+#  left_join(SettlementDF_Full) %>% ## need to bring/load this dataset at beginning of script!! 
+ # write_csv(here::here("Data", "full.csv"))
+
+#full2 <- full %>% 
+ # group_by(Location) %>% 
+ # summarize(totalPacuta_site = sum(Pacuta_counts), 
+        #    totalcoralcover_site = sum(coral_counts))
+
+#full3 <- full2 %>% 
+ # group_by(Location) %>% 
+ # summarize(totalPacuta_site_percent = (totalPacuta_site/totalcoralcover_site)*100)
 
 ```
 
