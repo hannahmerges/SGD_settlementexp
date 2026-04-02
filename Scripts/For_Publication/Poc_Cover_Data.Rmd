@@ -45,11 +45,11 @@ RecruitmentCounts2.1 <- read_csv((here::here("Data", "RecruitmentCounts2.1.csv")
 ## December, 2025: 
 
 
-## Tidy data and join in Danielle's Poc cover data 
+## Tidy data and join in DMB's Poc cover data 
 -  a) filter out the sand and hard substrate categories and 
 -  b) sum the totals by cowtagid to get percent cover of the biotics 
 -  c) calcualte percent cover of P. acuta based on total amount of biotics in the area 
--  Add in 0s for the cowtags that don't have P acuta counts (confirmed with Danielle, August 2024)
+-  Add in 0s for the cowtags that don't have P acuta counts (confirmed with DMB, August 2024)
 ```{r}
 
 #######################
@@ -58,7 +58,7 @@ RecruitmentCounts2.1 <- read_csv((here::here("Data", "RecruitmentCounts2.1.csv")
 
 Corals <- c("Pocillopora acuta","Porites rus","Montipora verrilli","Montipora setosa","Montipora grisea","Porites irregularis","Porites lobata","Pocillopora verrucosa","Pavona chiriquiensis","Pavona cactus","Leptastrea transversa","Acropora","Acropora pulchra","Montipora capitata")
 
-## creating df of just corals using Danielle's df + new "Corals" only df 
+## creating df of just corals using DMB's df + new "Corals" only df 
 df_corals <- Poc_cover_data %>% 
   filter(Taxa %in% Corals, 
          Location %in% c("Cabral", "Varari")) %>% 

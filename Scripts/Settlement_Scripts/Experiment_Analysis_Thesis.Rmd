@@ -53,6 +53,18 @@ SettlementCount_wsalinity <- SettlementCount_wsalinity %>%
 
 ```
 
+## March, 2026: Calculate the total number of replicates per treatment for each site/month 
+```{r}
+
+treat_reps <- SettlementCount_updated %>% 
+  dplyr::select(c("site", "treatment_level")) %>% 
+  group_by(site, treatment_level) %>% 
+  dplyr::summarize(count = dplyr::n(), .groups = "drop")
+
+```
+
+
+
 ## Tidy the data 
 - adding in proportion of settlement calculations 
 ```{r}

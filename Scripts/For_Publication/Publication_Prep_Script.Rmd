@@ -29,7 +29,9 @@ library(PNWColors)
 library(factoextra)
 library(devtools)
 library(ggbiplot)
+library(MASS)
 library(car)
+library(performance)
 ```
 
 
@@ -53,11 +55,43 @@ RecruitmentCounts2.1 <- read_csv((here::here("Data", "RecruitmentCounts2.1.csv")
 ```
 
 
+### February, 2026: 
+-  Determine acidity diff. in pH units between both sites and ambient SW 
+```{r}
+SettlementCount_wsalinitypH <- read_csv(here::here("Data", "SettlementCounts_edited_wSALINITYpH.csv"))
+
+exp_pH_diff <- SettlementCount_wsalinitypH %>% 
+  dplyr::select(c("treatment_level", "site", "pH")) %>% 
+  group_by(site,treatment_level) %>% 
+  dplyr::summarize(avg_pH = mean(pH, na.rm=TRUE))
+
+View(exp_pH_diff)
+
+## cabral - varari for 
+
+#### ambient: 
+7.977-7.936 ## 0.041
+
+#### low: 
+7.966-7.949 ## 0.017
+
+#### med: 
+7.948-7.935 ## 0.013
+
+#### high: 
+7.927 - 7.920 ## 0.007
+
+
+
+```
+
+
+
 ### December 2025: 
 -  Check if silicate and percent cover are correlated at Varari --> Result = silicate and percent cover are NONLINEARLY correlated at Varari only 
 -  For both silicate vs percent cover and silicate vs settlement use "silicate_avg", which are raw values 
--  **NOTE:** silicate_avg values were originally calculated from "AllChemData <- read_csv("https://raw.githubusercontent.com/njsilbiger/MooreaSGD_site-selection/main/Data/August2021/Allbiogeochemdata_QC.csv")" in the "RecruitmentTiles_PrelimAnalysis.Rmd" script. Raw silicate values were averaged across tides/days from August 2021. 
--  **NOTE:** Percent cover data was collected from Danielle Barnas' community surveys --> calculations are shown in "Poc_Cover_Data" script, uses P acuta counts / total counts of biotic organisms per each CowTagID location. Here, values are logged for normalcy of the data
+-  **NOTE:** silicate_avg values were originally calculated from "AllChemData <- read_csv("https://raw.githubusercontent.com/NJS/MooreaSGD_site-selection/main/Data/August2021/Allbiogeochemdata_QC.csv")" in the "RecruitmentTiles_PrelimAnalysis.Rmd" script. Raw silicate values were averaged across tides/days from August 2021. ** CHANGE BACK TO FULL NAME AFTER PUBLISHED (April, 2026)
+-  **NOTE:** Percent cover data was collected from DMB' community surveys --> calculations are shown in "Poc_Cover_Data" script, uses P acuta counts / total counts of biotic organisms per each CowTagID location. Here, values are logged for normalcy of the data
 
 -  Confirming correlation between percent cover and silicate: 
 ```{r}
@@ -164,15 +198,13 @@ adultcover_settlers_V <- ggplot() +
                  y = sum_total), 
              method = "lm", color="black", alpha=0.5) + 
   theme_classic() + 
-  labs(x = "Logged % Cover of Adult Pocillopora", 
+  labs(x = "Log(% Cover of Adults)", 
        y= "Total Settlers") + 
-    theme(axis.text.x=element_text(size=40), 
-        axis.text.y=element_text(size=40), 
-        axis.title.x=element_text(size=30), 
-        axis.title.y=element_text(size=30), 
-        legend.text=element_text(size=40),  # Adjust legend text size
-        legend.title=element_text(size=40), # Adjust legend title size
-        strip.text=element_text(size=40))
+  theme(axis.text.x=element_text(size=30), 
+        axis.text.y=element_text(size=30), 
+        axis.title.x=element_text(size=40), 
+        axis.title.y=element_text(size=40), 
+        strip.text=element_text(size=30))
 
 adultcover_settlers_V
 ggsave(here::here("Outputs", "Publication", "settlers_adults_V.jpg"), 
@@ -189,17 +221,15 @@ adultcover_silicate_V <- ggplot() +
   geom_smooth(data = SettlementDF_Full %>% dplyr::filter(Location=="Varari"), 
              aes(x = silicate_avg, 
                  y = log(percent_cover+1)), 
-             method = "glm.nb", formula = "y~poly(x,2)", color="black", alpha=0.5) + 
+             method = "lm", formula = "y~poly(x,2)", color="black", alpha=0.5) + 
   theme_classic() + 
   labs(x = expression(Average~Silicate~(mu*mol~L^-1)), 
-       y="Logged % Cover of Adult Pocillopora") + 
-    theme(axis.text.x=element_text(size=40), 
-        axis.text.y=element_text(size=40), 
-        axis.title.x=element_text(size=30), 
-        axis.title.y=element_text(size=30), 
-        legend.text=element_text(size=40),  # Adjust legend text size
-        legend.title=element_text(size=40), # Adjust legend title size
-        strip.text=element_text(size=40))
+       y="Log(% Cover of Adults)") + 
+  theme(axis.text.x=element_text(size=30), 
+        axis.text.y=element_text(size=30), 
+        axis.title.x=element_text(size=40), 
+        axis.title.y=element_text(size=40), 
+        strip.text=element_text(size=30))
 
 adultcover_silicate_V
 ggsave(here::here("Outputs", "Publication", "silicate_adults_V.jpg"), 
@@ -219,13 +249,11 @@ silicate_settlers_V <- ggplot() +
   theme_classic() + 
   labs(x = expression(Average~Silicate~(mu*mol~L^-1)), 
        y="Total Settlers") + 
-    theme(axis.text.x=element_text(size=40), 
-        axis.text.y=element_text(size=40), 
-        axis.title.x=element_text(size=30), 
-        axis.title.y=element_text(size=30), 
-        legend.text=element_text(size=40),  # Adjust legend text size
-        legend.title=element_text(size=40), # Adjust legend title size
-        strip.text=element_text(size=40))
+ theme(axis.text.x=element_text(size=30), 
+        axis.text.y=element_text(size=30), 
+        axis.title.x=element_text(size=40), 
+        axis.title.y=element_text(size=40), 
+        strip.text=element_text(size=30))
 
 silicate_settlers_V
 ggsave(here::here("Outputs", "Publication", "silicate_settlers_V.jpg"), 
@@ -247,15 +275,13 @@ adultcover_settlers_C <- ggplot() +
                  y = sum_total), 
              method = "lm", color="black", alpha=0.5) + 
   theme_classic() + 
-  labs(x = "Logged % Cover of Adult Pocillopora", 
+  labs(x = "Log(% Cover of Adults)", 
        y="Total Settlers") + 
-    theme(axis.text.x=element_text(size=40), 
-        axis.text.y=element_text(size=40), 
-        axis.title.x=element_text(size=30), 
-        axis.title.y=element_text(size=30), 
-        legend.text=element_text(size=40),  # Adjust legend text size
-        legend.title=element_text(size=40), # Adjust legend title size
-        strip.text=element_text(size=40))
+    theme(axis.text.x=element_text(size=30), 
+        axis.text.y=element_text(size=30), 
+        axis.title.x=element_text(size=40), 
+        axis.title.y=element_text(size=40), 
+        strip.text=element_text(size=30))
 
 adultcover_settlers_C
 ggsave(here::here("Outputs", "Publication", "settlers_adults_V.jpg"), 
@@ -275,14 +301,12 @@ adultcover_silicate_C <- ggplot() +
             # method = "lm", formula = "y ~ poly(x,2)", color="black", alpha=0.5) + 
   theme_classic() + 
   labs(x = expression(Average~Silicate~(mu*mol~L^-1)), 
-       y="Logged % Cover of Adult Pocillopora") + 
-    theme(axis.text.x=element_text(size=40), 
-        axis.text.y=element_text(size=40), 
-        axis.title.x=element_text(size=30), 
-        axis.title.y=element_text(size=30), 
-        legend.text=element_text(size=40),  # Adjust legend text size
-        legend.title=element_text(size=40), # Adjust legend title size
-        strip.text=element_text(size=40))
+       y="Log(% Cover of Adults)") + 
+    theme(axis.text.x=element_text(size=30), 
+        axis.text.y=element_text(size=30), 
+        axis.title.x=element_text(size=40), 
+        axis.title.y=element_text(size=40), 
+        strip.text=element_text(size=30))
 
 adultcover_silicate_C
 ggsave(here::here("Outputs", "Publication", "silicate_adults_C.jpg"), 
@@ -298,13 +322,11 @@ silicate_settlers_C <- ggplot() +
   theme_classic() + 
   labs(x = expression(Average~Silicate~(mu*mol~L^-1)), 
        y="Total Settlers") + 
-    theme(axis.text.x=element_text(size=40), 
-        axis.text.y=element_text(size=40), 
-        axis.title.x=element_text(size=30), 
-        axis.title.y=element_text(size=30), 
-        legend.text=element_text(size=40),  # Adjust legend text size
-        legend.title=element_text(size=40), # Adjust legend title size
-        strip.text=element_text(size=40))
+    theme(axis.text.x=element_text(size=30), 
+        axis.text.y=element_text(size=30), 
+        axis.title.x=element_text(size=40), 
+        axis.title.y=element_text(size=40), 
+        strip.text=element_text(size=30))
 
 silicate_settlers_C
 ggsave(here::here("Outputs", "Publication", "silicate_settlers_C.jpg"), 
@@ -322,7 +344,7 @@ full_plot <- (adultcover_silicate_V + adultcover_settlers_V  + silicate_settlers
 
 full_plot
 ggsave(here::here("Outputs", "Publication", "full_plot.jpg"), 
-       width=20, height=16)
+       width=24, height=18)
 ```
 
 
@@ -352,10 +374,14 @@ summary(Settlers_SGD_V)
 check_model(Settlers_SGD_V) # a little bit wonky in dispersion and zero-inflation + homogeniety of variance 
 
 # percent cover x silicate  
-PocCover_SGD_V <- glm.nb(log(percent_cover+1) ~ ((silicate_avg) + I(silicate_avg^2)), data=SettlementDF_Full %>% 
+## updated on Feb 23rd, 2026 -- changed from glm.nb() to lm() b/c percent cover is not discrete 
+PocCover_SGD_V_lm <- lm(log(percent_cover+1) ~ ((silicate_avg) + I(silicate_avg^2)), data=SettlementDF_Full %>% 
                                   dplyr::filter(Location=="Varari"))
 
-anova(PocCover_SGD_V) ## p = 0.029 for non-linear
+anova(PocCover_SGD_V) ## p = 0.029 for non-linear -- this one was WITH glm 
+anova(PocCover_SGD_V_lm) ## p = 0.044 for non-linear
+check_model(PocCover_SGD_V_lm)
+
 summary(PocCover_SGD_V)
 check_model(PocCover_SGD_V) # little bit wonky in dispersion and zero-inflation + homogeniety of variance 
 
@@ -372,11 +398,15 @@ summary(PocCover_Settlers_C)
 check_model(PocCover_Settlers_C) # little bit wonky in dispersion and zero-inflation
 
 # percent cover x silicate  
-PocCover_SGD_C <- glm.nb(log(percent_cover+1) ~ ((silicate_avg) + I(silicate_avg^2)), data=SettlementDF_Full %>% 
+## updated on Feb 23rd, 2026 -- changed from glm.nb() to lm() b/c percent cover is not discrete 
+PocCover_SGD_C_lm <- lm(log(percent_cover+1) ~ ((silicate_avg) + I(silicate_avg^2)), data=SettlementDF_Full %>% 
                                   dplyr::filter(Location=="Cabral"))
 
 
-anova(PocCover_SGD_C) ## NOT SIGNIFICANT
+anova(PocCover_SGD_C) ## NOT SIGNIFICANT -- this one was WITH glm 
+anova(PocCover_SGD_C_lm) ## STILL NOT SIGNIFICANT 
+check_model(PocCover_SGD_V_lm)
+
 summary(PocCover_SGD_C)
 check_model(PocCover_SGD_C) # a bit wonky in dispersion and zero-inflation + homogeniety of variance 
 
@@ -388,13 +418,6 @@ anova(SGD_Settlers_C) ## NOT SIGNIFICANT
 check_model(SGD_Settlers_C)
 
 ```
-
-
-
-
-
-
-
 
 
 
