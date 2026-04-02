@@ -1,4 +1,8 @@
-# SGD_settlementexp
-Chapter 2 - Settlement and Recruitment Exp 
+# Land-based inputs drive demographic feedbacks in a tropical brooding coral
 
+Abstract:
 Recruitment is a critical demographic bottleneck that governs coral population persistence and reef recovery, yet the fine-scale environmental gradients that regulate settlement remain poorly resolved. Submarine groundwater discharge (SGD) creates spatially structured, multivariate biogeochemical gradients in nearshore reefs, altering salinity, carbonate chemistry, and nutrient availability. Here, we combined controlled 24-hour settlement experiments using groundwater–seawater dilutions with an eight-month in situ deployment of settlement tiles along natural SGD gradients at two reefs in Moorea, French Polynesia, characterized by distinct groundwater chemistry and hydrodynamics. In laboratory assays, settlement responses to SGD were site dependent: larvae exposed to groundwater from one site exhibited increased settlement with increased SGD, whereas no effect of SGD was detected at the second site. In situ, SGD exhibited nonlinear relationships with adult Pocillopora cover and settler abundance at one reef, peaking at intermediate SGD influence. Across both reefs, adult coral cover positively predicted settler density. These results demonstrate that SGD can directly alter larval settlement and indirectly regulate recruitment by restructuring adult populations, revealing that spatially heterogeneous, land-based inputs can fuel demographic feedbacks at ecologically relevant scales. As groundwater fluxes shift with climate change, understanding how multivariate environmental gradients shape recruitment will be essential for predicting reef resilience.
+
+Keywords: submarine groundwater discharge, settlement, coral, Moorea, Pocillopora, biogeochemistry, environmental gradient
+
+All data, scripts, and outputs directly related to the submission can be found in the respective "For Publication" folders.
